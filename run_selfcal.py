@@ -69,11 +69,11 @@ phasecal.uvmmin         = 40000'''
     return PARSET
 
 
-def run_wsclean(ms, options, colname='DATA', name='image', j=32, mem=75, scale='0.025asec', size=1024, baseline_averaging=100, no_update_model_required=True, niter=5000, auto_mask=5,\
+def run_wsclean(ms, colname='DATA', name='image', j=32, mem=75, scale='0.025asec', size=1024, baseline_averaging=100, no_update_model_required=True, niter=5000, auto_mask=5,\
     auto_threshold=1.5, local_rms=True, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, minuvw_m=30000, taper_gaussian=0.0,\
     predict=False):
     time_start = time.time()
-    command = 'wsclean -data-column {colname:s} -name {imgname:s} -size {size:d} {size:d} -niter {niter:d}'.format(colname=colname, imgname=name, size=size)
+    command = 'wsclean -data-column {colname:s} -name {imgname:s} -size {size:d} {size:d} -niter {niter:d}'.format(colname=colname, imgname=name, size=size, niter=niter)
     if not predict:
         if no_update_model:
             command += '-no-update-model-required '
