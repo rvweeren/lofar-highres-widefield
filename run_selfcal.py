@@ -73,14 +73,14 @@ def run_wsclean(ms, colname='DATA', name='image', j=32, mem=75, scale='0.025asec
     auto_threshold=1.5, local_rms=True, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, minuvw_m=30000, taper_gaussian=0.0,\
     predict=False):
     time_start = time.time()
-    command = 'wsclean -data-column {colname:s} -name {imgname:s} -size {size:d} {size:d} -niter {niter:d}'.format(colname=colname, imgname=name, size=size, niter=niter)
+    command = 'wsclean -data-column {colname:s} -name {imgname:s} -scale {scale:s} -size {size:d} {size:d} -niter {niter:d} '.format(colname=colname, imgname=name, size=size, niter=niter, scale=scale)
     if not predict:
-        if no_update_model:
+        if no_update_model_required:
             command += '-no-update-model-required '
         if join_channels:
             command += '-join-channels '
         if baseline_averaging:
-            command += '-baseline-averaging {blavg:d}'.format(baseline_averaging)
+            command += '-baseline-averaging {blavg:d} '.format(blavg=baseline_averaging)
         if stop_negative:
             command += '-stop-negative '
     if weight == 'briggs':
@@ -88,9 +88,9 @@ def run_wsclean(ms, colname='DATA', name='image', j=32, mem=75, scale='0.025asec
     if auto_mask:
         command += '-auto-mask {auto_mask:f} '.format(auto_mask=auto_mask)
     if auto_threshold:
-        command += '-auto-threshold {autothres:f} '.format(autothresh=auto_threshold)
+        command += '-auto-threshold {autothresh:f} '.format(autothresh=auto_threshold)
     if local_rms:
-        command += '-local-rms'
+        command += '-local-rms '
     if channels_out:
         command += '-channels-out {chano:d} '.format(chano=channels_out)
     if minuvw_m:
