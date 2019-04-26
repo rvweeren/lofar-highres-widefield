@@ -122,7 +122,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
     statistics = []
     if not os.path.isfile(image_name + '_initial-MFS-image.fits'):
         logging.info('MAKING INITIAL IMAGE')
-        run_wsclean(ms, j=32,,mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname=colname, name=image_name+'_initial')
+        run_wsclean(ms, j=32, mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname=colname, name=image_name+'_initial')
     else:
         logging.info('Initial image exists, skipping WSClean image step.')
 
@@ -130,7 +130,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
     statistics.append(statistic_current)
     if not os.path.isfile(ms+'_has_predict_initial'):
         logging.info('PREDICTING INITIAL IMAGE')
-        run_wsclean(ms, j=32,,mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname=colname, name=image_name+'_initial', predict=True)
+        run_wsclean(ms, j=32, mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname=colname, name=image_name+'_initial', predict=True)
         subprocess.call('touch {ms}_has_predict_initial'.format(ms=ms), shell=True)
     else:
         logging.info('Initial model has been predicted, skipping WSClean predict step.')
@@ -163,7 +163,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
 
             # Image self-calibrated data, check if the image improved and predict back.
             if not os.path.isfile(image_name + '_p{iteration}-MFS-image.fits'.format(iteration=i)):
-                run_wsclean(ms, j=32,,mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_p{iteration}'.format(iteration=i), predict=False)
+                run_wsclean(ms, j=32, mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_p{iteration}'.format(iteration=i), predict=False)
             else:
                 logging.info('Iteration p{iteration} has been imaged already, skipping WSClean.'.format(iteration=i))
             statistic_new = measure_statistic(image_name + '_p{iteration}-MFS-image.fits'.format(iteration=i))
@@ -186,7 +186,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
                     logging.info('Image improved less than 2% three successive times, selfcal is likely stalling.')
                     done = True
             logging.info('Predicting back to MODEL_DATA.')
-            run_wsclean(ms, j=32,,mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_p{iteration}'.format(iteration=i), predict=True)
+            run_wsclean(ms, j=32, mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_p{iteration}'.format(iteration=i), predict=True)
             subprocess.call('touch {ms}_has_predict_phase_p{iteration}'.format(ms=ms, iteration=i), shell=True)
 
     # Start iterating amplitude+phase self-calibration cycles.
@@ -215,7 +215,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
 
             # Image self-calibrated data, check if the image improved and predict back.
             if not os.path.isfile(image_name + '_ap{iteration}-MFS-image.fits'.format(iteration=i)):
-                run_wsclean(ms, j=32,,mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_ap{iteration}'.format(iteration=i), predict=False)
+                run_wsclean(ms, j=32, mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_ap{iteration}'.format(iteration=i), predict=False)
             else:
                 logging.info('Iteration ap{iteration} has been imaged already, skipping WSClean.'.format(iteration=i))
             statistic_new = measure_statistic(image_name + '_ap{iteration}-MFS-image.fits'.format(iteration=i))
@@ -238,7 +238,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
                     logging.info('Image improved less than 2% three successive times, selfcal is likely stalling.')
                     done = True
             logging.info('Predicting back to MODEL_DATA.')
-            run_wsclean(ms, j=32,,mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_ap{iteration}'.format(iteration=i), predict=True)
+            run_wsclean(ms, j=32, mem=75, scale='0.025asec', baseline_averaging=290, no_update_model_required=True, niter=5000, auto_mask=5, local_rms=True, auto_threshold=1.5, weight='briggs', robust=-1, channels_out=12, join_channels=True, stop_negative=True, size=1024, minuvw_m=30000, colname='CORRECTED_DATA_PHASE_ONLY', name=image_name + '_ap{iteration}'.format(iteration=i), predict=True)
             subprocess.call('touch {ms}_has_predict_ampphase_ap{iteration}'.format(ms=ms, iteration=i), shell=True)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
