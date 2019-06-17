@@ -151,7 +151,6 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
         done = False
         while not done:
             logging.info('Iteration: ' + str(i))
-            statistic_current = statistic_new
             if os.path.isfile('selfcal_p{iteration}.h5'.format(iteration=i)):
                 # This iteration has been run already; skip to the next.
                 logging.info('DPPP iteration {iteration} has been run already, skipping DPPP.'.format(iteration=i))
@@ -175,6 +174,7 @@ def main(ms, solint_phase, nchan_phase, solint_amp, nchan_amp, image_name='image
                 # Image quality improved, predict back.
                 logging.info('Image quality improved.')
                 stall = 0
+                statistic_current = statistic_new
             elif statistic_new < statistic_current:
                 logging.info('Image quality did not improve, stopping phase-only iterations at this solint.')
                 logging.info('Best iteration: {:d}'.format(i-1))
