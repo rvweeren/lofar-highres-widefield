@@ -71,10 +71,13 @@ if config['data'].getboolean('do_apply_infield'):
         except Exception as e:
             traceback.print_exc()
             die()
+else:
+    logger.info('Infield solutions have been applied, skipping applycal step.')
 
 logger.info('Tapering data to target resolution of {:s}.'.format(config['image']['taper_full']))
-print('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out 6 -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], ' '.join(mses)))
-os.system('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out 6 -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], ' '.join(mses)))
+chan_out = (len(mses) // 4) + 1
+print('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
+os.system('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
 for ms in mses:
     print('transfer_imgaging_weight.py {:s}'.format(ms))
 
