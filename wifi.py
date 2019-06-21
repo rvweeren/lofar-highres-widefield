@@ -74,34 +74,68 @@ if config['data'].getboolean('do_apply_infield'):
 else:
     logger.info('Infield solutions have been applied, skipping applycal step.')
 
-logger.info('Tapering data to target resolution of {:s}.'.format(config['image']['taper_full']))
-chan_out = (len(mses) // 4) + 1
-print('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
-os.system('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
-for ms in mses:
-    print('transfer_imgaging_weight.py {:s}'.format(ms))
+if (os.path.exists(os.getcwd() + '/wsclean_taper-dirty.fits')) or (os.path.exists(os.getcwd() + '/wsclean_taper-MFS-image.fits')):
+    logger.info('Taper has already been created, skipping WSClean step.')
+else:
+    logger.info('Tapering data to target resolution of {:s}.'.format(config['image']['taper_full']))
+    chan_out = (len(mses) // 4) + 1
+    print('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -fit-beam -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
+    os.system('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -fit-beam -weight briggs {:s} -size 1024 1024 -scale 0.025asec -store-imaging-weights -no-reorder -no-update-model-required -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
+    for ms in mses:
+        print('transfer_imaging_weight.py {:s}'.format(ms))
+        os.system('transfer_imaging_weight.py {:s}'.format(ms))
 
 #logger.info('Determining image weighting for lowest noise.')
 #for r in range(-1.0, 1.0):
 #    print('wsclean -no-update-model-required -minuv-l 80.0 -size 1024 1024 -reorder -weight briggs 0.6 -weighting-rank-filter 3 -clean-border 1 -mgain 0.8 -fit-beam -data-column {:s} -join-channels -channels-out 6 -padding 1.4 -auto-mask 2.5 -auto-threshold 1.0 -multiscale -multiscale-scales 0,4,8,16,32,64 -fit-spectral-pol 3 -pol i -baseline-averaging 0.266316109008 -name imagep1_b0.6 -scale 0.025arcsec -niter 0 {:s}'.format(config['data']['data_column'], mses[0]))
+if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.int.restored.fits'):
+    logger.info('Initial widefield image already exists, not recreating.')
+else:
+    logger.info('Creating {:s}" widefield image.'.format(config['image']['taper_full']))
+    print('DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS=mslist.txt --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000'.format(ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
+    os.system('DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=1 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000'.format(config['data']['mslist'], ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
 
-logger.info('Creating {:s}" widefield image.'.format(config['image']['taper_full']))
-#print('DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS=mslist.txt --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000'.format(ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
-os.system('DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS=mslist.txt --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000'.format(ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
+if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.app.restored.fits.mask.fits'):
+    logger.info('First mask already exists, not recreating.')
+else:
+    logger.info('Creating mask from initial image.')
+    print('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=5 --Box=50,2')
+    os.system('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=5 --Box=50,2')
 
-logger.info('Pipeline finished successfully.')
-sys.exit(0)
-logger.info('Selecting potential DD calibration sources.')
+if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.int.restored.fits'):
+    logger.info('Mask-cleaned image already exists, not recreating.')
+else:
+    logger.info('Cleaning deeper with mask.')
+    print('DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000 --Mask-External=image_dirin_SSD.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(config['data']['mslist'], ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
+    os.system('DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000 --Mask-External=image_dirin_SSD_init_natural.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(config['data']['mslist'], ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
+
+if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits')
+    logger.info('Second mask already exists, not recreating.')
+else:
+    logger.info('Creating second mask.')
+    print('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural_m.app.restored.fits --Th=5 --Box=50,2')
+    os.system('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural_m.app.restored.fits --Th=5 --Box=50,2')
+
+if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m2.int.restored.fits'):
+    logger.info('Final image already exists, not recreating.')
+else:
+    logger.info('Cleaning again with second mask.')
+    os.system('DDF.py --Output-Name=image_dirin_SSD_init_natural_m2 --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=2 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000 --Mask-External=image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural_m.DicoModel --Cache-Dirty=forceresidual'.format(config['data']['mslist'], ic=config['image']['data_column'], cell=float(config['image']['cellsize_full'])))
+
+logger.info('Making PyBDSF catalogue to select potential DDE calibrators.')
 import bdsf
-fitsname = 'image_dirin_SSD_init_natural.int.restored.fits'
-detectimage = 'image_dirin_SSD_init_natural.app.restored.fits'
+fitsname = 'image_dirin_SSD_init_natural_m2.int.restored.fits'
+detectimage = 'image_dirin_SSD_init_natural_m2.app.restored.fits'
 # Pull the reference frequency from the header.
-fhead = fits.open('image_dirin_SSD_init_natural.int.restored.fits')
+fhead = fits.open('image_dirin_SSD_init_natural_m2.int.restored.fits')
 restfrq= fhead[0].header['CRVAL3']
 # Run PyBDSF with standard SKSP settings.
 res = bdsf.process_image(fitsname, detection_image=detectimage, thresh_isl=4.0, thresh_pix=5.0, rms_box=(150,15), rms_map=True, mean_map='zero', ini_method='intensity', adaptive_rms_box=True, adaptive_thresh=150, rms_box_bright=(60,15), group_by_isl=False, group_tol=10.0, output_opts=True, output_all=True, atrous_do=True, atrous_jmax=4, flagging_opts=True, flag_maxsize_fwhm=0.5, advanced_opts=True, blank_limit=None, frequency=restfrq)
 # Write out a catalog.
 res.write_catalog(outfile='skymodel_1asec_lbregion_pybdsf.csv', bbs_patches='source', catalog_type='gaul', format='csv')
+
+logger.info('Pipeline finished successfully.')
+sys.exit(0)
 
 if config['mosaic'].getboolean('do_mosaic'):
     logger.info('0.2" mosaic requested. [NOT YET IMPLEMENTED]')
