@@ -41,8 +41,6 @@ config.read(sys.argv[1])
 logger.info('Checking inputs.')
 if not os.path.isdir(config['data']['highres_data']):
     pass#die('High resolution data not found!')
-if not os.path.isdir(config['solutions']['kms_solsdir']):
-    pass#die('killMS DIS2 solutions not found!')
 if not os.path.isfile(config['solutions']['infield_sols_p']):
     die('Infield calibrator phase solutions not found!')
 if not os.path.isfile(config['solutions']['infield_sols_ap']):
@@ -52,30 +50,54 @@ mses = []
 with open(config['data']['mslist']) as f:
     for l in f.readlines():
         mses.append(l.strip())
-'''
-logger.info('Converting kMS solutions to H5Parm.')
-for ms in mses:
-    sols_npz = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.npz'
-    sols_h5 = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.h5'
-    try:
-        print('killMS2H5parm.py {h5:s} {npz:s}'.format(h5=sols_h5, npz=sols_npz))
-    except Exception as e:
-        traceback.print_exc()
-        die()
-'''
+
+if config['data'].getboolean('do_apply_kms'):
+# This will apply the DIS2 solutions from the ddf-pipeline to arrive at DATA_DI_CORRECTED.
+    if not os.path.exists(config['solutions']['kms_solsdir']):
+        die('killMS solution directory not found!')
+    logger.info('Converting kMS solutions to H5Parm.')
+    for ms in mses:
+        sols_npz = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.npz'
+        sols_h5 = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.h5'
+        try:
+            cmd = 'killMS2H5parm.py {h5:s} {npz:s}'.format(h5=sols_h5, npz=sols_npz)
+            logger.info(cmd)
+            subprocess.call(cmd, shell=True)
+        except Exception as e:
+            traceback.print_exc()
+            die()
+
+if config['data'].getboolean('do_subtract'):
+# Subtract sources outside a given region using the DDS3 solutions from the ddf-pipeline.
+# This is especially important with bright sources outside the FoV of the international stations,
+# but inside that of the Dutch stations.
+    dc = config['subtract']['subtract_from']
+    box = config['subtract']['boxfile']
+    cmd ='sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p keepcenter'.format(box, config['data']['mslist'], dc)
+    logger.info(cmd)
+    subprocess.call(cmd, shell=True)
 
 if config['data'].getboolean('do_apply_infield'):
     logger.info('Applying infield calibrator solutions: DATA -> CORRECTED_DATA')
     for ms in mses:
         sols_p = config['solutions']['infield_sols_p']
-        sols_ap = config['solutions']['infield_sols_ap']
-        try:
-            with open('apply_infield_solutions.parset', 'w') as f:
-                f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1,applyif2] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000 applyif2.type=applycal applyif2.steps=[p,a] applyif2.parmdb={h52:s} applyif2.solset={ss2:s} applyif2.p.correction=phase000 applyif2.a.correction=amplitude000'.format(dc=config['data']['data_column'], ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset'], h52=sols_ap, ss2=config['solutions']['infield_solset']).replace(' ', '\n'))
-            os.system('DPPP apply_infield_solutions.parset')
-        except Exception as e:
-            traceback.print_exc()
-            die()
+        if not config['solutions']['infield_phase_only']:
+            sols_ap = config['solutions']['infield_sols_ap']
+            try:
+                with open('apply_infield_solutions.parset', 'w') as f:
+                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1,applyif2] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000 applyif2.type=applycal applyif2.steps=[p,a] applyif2.parmdb={h52:s} applyif2.solset={ss2:s} applyif2.p.correction=phase000 applyif2.a.correction=amplitude000'.format(dc=config['data']['data_column'], ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset'], h52=sols_ap, ss2=config['solutions']['infield_solset']).replace(' ', '\n'))
+                os.system('DPPP apply_infield_solutions.parset')
+            except Exception as e:
+                traceback.print_exc()
+                die()
+        else:
+            try:
+                with open('apply_infield_solutions.parset', 'w') as f:
+                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000'.format(dc=config['data']['data_column'], ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset'], ['infield_solset']).replace(' ', '\n'))
+                os.system('DPPP apply_infield_solutions.parset')
+            except Exception as e:
+                traceback.print_exc()
+                die()
 else:
     logger.info('Infield solutions have been applied, skipping applycal step.')
 
