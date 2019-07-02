@@ -71,8 +71,18 @@ if config['data'].getboolean('do_subtract'):
 # Subtract sources outside a given region using the DDS3 solutions from the ddf-pipeline.
 # This is especially important with bright sources outside the FoV of the international stations,
 # but inside that of the Dutch stations.
+    # Load the required settings.
     dc = config['subtract']['subtract_from']
     box = config['subtract']['boxfile']
+    # Copy over the required files.
+    path = config['subtract']['lotss_directory']
+    import shutil; from distutils.dir_util import copy_tree
+    reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_5038110493.005561_smoothed.npz', 'DDS3_full_slow_5038110493.005561_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
+    for r in reqs:
+        if os.path.isfile(path + r)
+            shutil.copy2(path + r, os.getcwd() + '/')
+        else:
+            copy_tree(path + r, os.getcwd() + '/')
     cmd ='sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p keepcenter'.format(box, config['data']['mslist'], dc)
     logger.info(cmd)
     subprocess.call(cmd, shell=True)
