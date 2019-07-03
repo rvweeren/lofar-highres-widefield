@@ -13,5 +13,7 @@ Requirements
 * DDFacet: https://github.com/saopicc/DDFacet
 * ddf-pipeline: https://github.com/mhardcastle/ddf-pipeline
 * DP3: https://github.com/lofar-astron/DP3
+* LoSoTo: https://github.com/revoltek/losoto
+* long baseline pipeline: https://github.com/lmorabit/long\_baseline\_pipeline
 * PyBDSF: https://github.com/lofar-astron/PyBDSF
 * WSClean: https://sourceforge.net/p/wsclean/wiki/Home/
