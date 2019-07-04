@@ -10,7 +10,7 @@ The end result of the pipeline is a 1'' map (final size to be determined) that i
 
 To run the pipeline, set the appropriate settings in the config file and run:
 ```
-wifi.py lb_config.cfg
+wifi.py lb_widefield.cfg
 ```
 
 Requirements
