@@ -8,6 +8,11 @@ The end result of the pipeline is a 1'' map (final size to be determined) that i
 3. apply the infield calibrator solutions to DI-correct the international stations.
 4. image the central region of the field at 1'' angular resolution.
 
+To run the pipeline, set the appropriate settings in the config file and run:
+```
+wifi.py lb_config.cfg
+```
+
 Requirements
 ------------
 * DDFacet: https://github.com/saopicc/DDFacet
