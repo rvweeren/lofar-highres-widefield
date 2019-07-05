@@ -60,13 +60,22 @@ if config['data'].getboolean('do_apply_kms'):
         sols_npz = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.npz'
         sols_h5 = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.h5'
         try:
-            cmd = 'killMS2H5parm.py {h5:s} {npz:s}'.format(h5=sols_h5, npz=sols_npz)
+            cmd = 'killMS2H5parm.py {h5:s} {npz:s} --nofulljones'.format(h5=sols_h5, npz=sols_npz)
             logger.info(cmd)
             subprocess.call(cmd, shell=True)
+            cmd2 = 'addIS_to_h5.py {h5:s} {ms:s} --solset_in sol000 --solset_out sol001 --do_int_stations'.format(h5=sols_h5, ms=ms)
+            logger.info(cmd2)
+            subprocess.call(cmd2, shell=True)
         except Exception as e:
             traceback.print_exc()
             die()
-
+    
+    logger.info('Applying kMS solutions to MS.')
+    for ms in mses:
+        with open('apply_kms.parset') as f:
+            sols = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.h5'
+            f.write('msin={ms:s} msin.datacolumn=DATA msout=. msout.datacolumn=DATA_DI_CORRECTED msout.storagemanager=dysco steps=[applykms] applykms.type=applycal applykms.steps=[p,a] applykms.parmdb={h5:s} applykms.solset={ss:s} applykms.p.correction=phase000 applykms.a.correction=amplitude000'.format(dc=config['data']['data_column'], ms=ms, h5=sols, ss=sol001).replace(' ', '\n'))
+        
 if config['data'].getboolean('do_subtract'):
 # Subtract sources outside a given region using the DDS3 solutions from the ddf-pipeline.
 # This is especially important with bright sources outside the FoV of the international stations,
