@@ -1,0 +1,8 @@
+msout = .
+
+steps = [flag]
+#steps = [flag2]
+flag.type = preflagger
+flag.baseline = ^[CR]S*&*
+flag2.type = preflagger
+flag2.baseline = DE601HBA

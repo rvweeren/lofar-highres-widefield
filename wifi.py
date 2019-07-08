@@ -58,7 +58,7 @@ if config['data'].getboolean('do_apply_kms'):
     logger.info('Converting kMS solutions to H5Parm.')
     for ms in mses:
         sols_npz = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.npz'
-        sols_h5 = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.h5'
+        sols_h5 = os.getcwd() + '/' + ms + '_DIS2_full.sols.h5'
         try:
             cmd = 'killMS2H5parm.py {h5:s} {npz:s} --nofulljones'.format(h5=sols_h5, npz=sols_npz)
             logger.info(cmd)
@@ -72,9 +72,12 @@ if config['data'].getboolean('do_apply_kms'):
     
     logger.info('Applying kMS solutions to MS.')
     for ms in mses:
-        with open('apply_kms.parset') as f:
-            sols = config['solutions']['kms_solsdir'] + '/' + ms + '/killMS.DIS2_full.sols.h5'
-            f.write('msin={ms:s} msin.datacolumn=DATA msout=. msout.datacolumn=DATA_DI_CORRECTED msout.storagemanager=dysco steps=[applykms] applykms.type=applycal applykms.steps=[p,a] applykms.parmdb={h5:s} applykms.solset={ss:s} applykms.p.correction=phase000 applykms.a.correction=amplitude000'.format(dc=config['data']['data_column'], ms=ms, h5=sols, ss=sol001).replace(' ', '\n'))
+        with open('apply_kms.parset', 'w') as f:
+            sols = os.getcwd() + '/' + ms + '_DIS2_full.sols.h5'
+            f.write('msin={ms:s} msin.datacolumn=DATA msout=. msout.datacolumn=DATA_DI_CORRECTED msout.storagemanager=dysco steps=[applykms] applykms.type=applycal applykms.steps=[p,a] applykms.parmdb={h5:s} applykms.solset={ss:s} applykms.p.correction=phase000 applykms.a.correction=amplitude000'.format(dc=config['data']['data_column'], ms=ms, h5=sols, ss='sol001').replace(' ', '\n'))
+        cmd = 'DPPP apply_kms.parset'
+        logger.info(cmd)
+        subprocess.call(cmd, shell=True)
         
 if config['data'].getboolean('do_subtract'):
 # Subtract sources outside a given region using the DDS3 solutions from the ddf-pipeline.
@@ -85,34 +88,57 @@ if config['data'].getboolean('do_subtract'):
     box = config['subtract']['boxfile']
     # Copy over the required files.
     path = config['subtract']['lotss_directory']
+    logger.info('Copying over necessary LoTSS products.')
     import shutil; from distutils.dir_util import copy_tree
     reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_5038110493.005561_smoothed.npz', 'DDS3_full_slow_5038110493.005561_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
     for r in reqs:
-        if os.path.isfile(path + r)
-            shutil.copy2(path + r, os.getcwd() + '/')
-        else:
-            copy_tree(path + r, os.getcwd() + '/')
+        if os.path.isfile(path + '/' + r):
+            shutil.copy2(path + '/' + r, os.getcwd() + '/')
+        elif os.path.isdir(path + '/' + r):
+            shutil.copytree(path + '/' + r, os.getcwd() + '/' + r)
+    logger.info('Flagging international stations in all MS.')
+    for ms in mses:
+        cmd1 = 'backup_flagtable.py {:s}'.format(ms)
+        cmd2 = 'DPPP flag_IS.parset msin={:s}'.format(ms)
+        logger.info(cmd1)
+        subprocess.call(cmd1, shell=True)
+        logger.info(cmd2)
+        subprocess.call(cmd2, shell=True)
+            
     cmd ='sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p keepcenter'.format(box, config['data']['mslist'], dc)
     logger.info(cmd)
     subprocess.call(cmd, shell=True)
 
+logger.info('Restoring flags.')
+for ms in mses:
+        cmd3 = 'restore_flagtable.py {:s}'.format(ms)
+        logger.info(cmd3)
+        subprocess.call(cmd3, shell=True)
+
 if config['data'].getboolean('do_apply_infield'):
-    logger.info('Applying infield calibrator solutions: DATA -> CORRECTED_DATA')
+    if os.path.isfile(os.getcwd() + '/' + 'image_full_ampphase_di_m.NS_SUB.log'):
+        logger.info('Applying infield calibrator solutions: DATA_SUB -> CORRECTED_DATA')
+        dc = 'DATA_SUB'
+    else:
+        logger.info('Applying infield calibrator solutions: {:s} -> CORRECTED_DATA'.format(config['data']['data_column']))
+        dc = config['data']['data_column']
     for ms in mses:
         sols_p = config['solutions']['infield_sols_p']
         if not config['solutions']['infield_phase_only']:
             sols_ap = config['solutions']['infield_sols_ap']
             try:
                 with open('apply_infield_solutions.parset', 'w') as f:
-                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1,applyif2] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000 applyif2.type=applycal applyif2.steps=[p,a] applyif2.parmdb={h52:s} applyif2.solset={ss2:s} applyif2.p.correction=phase000 applyif2.a.correction=amplitude000'.format(dc=config['data']['data_column'], ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset'], h52=sols_ap, ss2=config['solutions']['infield_solset']).replace(' ', '\n'))
-                os.system('DPPP apply_infield_solutions.parset')
+                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1,applyif2] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000 applyif2.type=applycal applyif2.steps=[p,a] applyif2.parmdb={h52:s} applyif2.solset={ss2:s} applyif2.p.correction=phase000 applyif2.a.correction=amplitude000'.format(dc=dc, ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset'], h52=sols_ap, ss2=config['solutions']['infield_solset']).replace(' ', '\n'))
+                cmd = 'DPPP apply_infield_solutions.parset'
+                logger.info(cmd)
+                subprocess.call(cmd, shell=True)
             except Exception as e:
                 traceback.print_exc()
                 die()
         else:
             try:
                 with open('apply_infield_solutions.parset', 'w') as f:
-                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000'.format(dc=config['data']['data_column'], ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset'], ['infield_solset']).replace(' ', '\n'))
+                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000'.format(dc=dc, ms=ms, h51=sols_p, ss1=config['solutions']['infield_solset']).replace(' ', '\n'))
                 os.system('DPPP apply_infield_solutions.parset')
             except Exception as e:
                 traceback.print_exc()
@@ -126,32 +152,29 @@ if len(tapered_images):
 else:
     logger.info('Tapering data to target resolution of {:s}.'.format(config['image']['taper_full']))
     chan_out = (len(mses) // 4) + 1
-    #logger.info('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.35asec -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)))
-    #subprocess.call('wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.35asec -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -channels-out {:d} -name wsclean_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], chan_out, ' '.join(mses)), shell=True)
     cmd = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.35asec -make-psf -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], mses[0].split('.')[-1])
     logger.info(cmd)
     subprocess.call(cmd, shell=True)
     for i,ms in enumerate(mses):
-        #cmd = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.35asec -make-psf -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_block{:03d}_taper {:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], i, ms)
-        #logger.info(cmd)
-        #subprocess.call(cmd, shell=True)
-        print('transfer_imaging_weight.py {:s}'.format(ms))
-        os.system('./transfer_imaging_weight.py {:s}'.format(ms))
+        cmd = 'transfer_imaging_weight.py {:s}'.format(ms)
+        logger.info(cmd)
+        subprocess.call(cmd, shell=True)
 
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.int.restored.fits'):
     logger.info('Initial widefield image already exists, not recreating.')
 else:
     logger.info('Creating {:s}" widefield image.'.format(config['image']['taper_full']))
-    cmd = 'DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS=mslist.txt --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000'.format(ic=config['image']['data_column'], cell=float(config['image']['cellsize_full']))
+    cmd = 'DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam 1.000000 --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Output-RestoringBeam 1.000'.format(config['data']['mslist'], ic=config['image']['data_column'], cell=float(config['image']['cellsize_full']))
     logger.info(cmd)
-    subprocessl.call(cmd, shell=True)
+    subprocess.call(cmd, shell=True)
 
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.app.restored.fits.mask.fits'):
     logger.info('First mask already exists, not recreating.')
 else:
     logger.info('Creating mask from initial image.')
-    print('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2')
-    os.system('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2')
+    cmd = 'MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2'
+    logger.info(cmd)
+    subprocess.call('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2', shell=True)
 
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.int.restored.fits'):
     logger.info('Mask-cleaned image already exists, not recreating.')
