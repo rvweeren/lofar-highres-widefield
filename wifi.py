@@ -7,6 +7,9 @@ import subprocess
 import sys
 import traceback
 
+import bdsf
+
+
 def die(reason=''):
     if reason:
         logger.error(reason)
@@ -14,14 +17,16 @@ def die(reason=''):
         logger.error('Something went wrong for an unknown reason!')
     sys.exit(-1)
 
+
 # One should have run `genericpipeline.py -d -c pipeline.cfg LB-Split-Calibrators.parset` before running this.
 # Two datasets must be present:
 # - blocks of 10SB for the target field
 # - a full bandwidth dataset for the infield calibrator
-
 try:
+    # See if there is a running directory defined.
     os.chdir(os.path.expandvars("$RUNDIR"))
-except:
+except FileNotFoundError:
+    # If not, that's fine, run in the current directory.
     pass
 CWD = os.getcwd()
 
@@ -30,9 +35,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 logger.name = sys.argv[0]
 
-logging.addLevelName( logging.INFO, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.INFO))
-logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
-logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+logging.addLevelName(logging.INFO, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.INFO))
+logging.addLevelName(logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+logging.addLevelName(logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
 
 # Read in the configuration file.
 config = configparser.ConfigParser()
@@ -40,7 +45,9 @@ config.read(sys.argv[1])
 
 logger.info('Checking inputs.')
 if not os.path.isdir(config['data']['highres_data']):
-    pass#die('High resolution data not found!')
+    # Used for msoaicing at 0.2-0.3''.
+    # die('High resolution data not found!')
+    pass
 if not os.path.isfile(config['solutions']['infield_sols_p']):
     die('Infield calibrator phase solutions not found!')
 if not os.path.isfile(config['solutions']['infield_sols_ap']):
@@ -52,7 +59,7 @@ with open(config['data']['mslist']) as f:
         mses.append(l.strip())
 
 if config['data'].getboolean('do_apply_kms'):
-# This will apply the DIS2 solutions from the ddf-pipeline to arrive at DATA_DI_CORRECTED.
+    # This will apply the DIS2 solutions from the ddf-pipeline to arrive at DATA_DI_CORRECTED.
     if not os.path.exists(config['solutions']['kms_solsdir']):
         die('killMS solution directory not found!')
     logger.info('Converting kMS solutions to H5Parm.')
@@ -69,7 +76,7 @@ if config['data'].getboolean('do_apply_kms'):
         except Exception as e:
             traceback.print_exc()
             die()
-    
+
     logger.info('Applying kMS solutions to MS.')
     for ms in mses:
         with open('apply_kms.parset', 'w') as f:
@@ -78,18 +85,19 @@ if config['data'].getboolean('do_apply_kms'):
         cmd = 'DPPP apply_kms.parset'
         logger.info(cmd)
         subprocess.call(cmd, shell=True)
-        
+
 if config['data'].getboolean('do_subtract'):
-# Subtract sources outside a given region using the DDS3 solutions from the ddf-pipeline.
-# This is especially important with bright sources outside the FoV of the international stations,
-# but inside that of the Dutch stations.
+    # Subtract sources outside a given region using the DDS3 solutions from the ddf-pipeline.
+    # This is especially important with bright sources outside the FoV of the international stations,
+    # but inside that of the Dutch stations.
     # Load the required settings.
     dc = config['subtract']['subtract_from']
     box = config['subtract']['boxfile']
     # Copy over the required files.
     path = config['subtract']['lotss_directory']
     logger.info('Copying over necessary LoTSS products.')
-    import shutil; from distutils.dir_util import copy_tree
+    import shutil
+    from distutils.dir_util import copy_tree
     reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_5038110493.005561_smoothed.npz', 'DDS3_full_slow_5038110493.005561_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
     for r in reqs:
         if os.path.isfile(path + '/' + r):
@@ -104,13 +112,13 @@ if config['data'].getboolean('do_subtract'):
         subprocess.call(cmd1, shell=True)
         logger.info(cmd2)
         subprocess.call(cmd2, shell=True)
-            
-    cmd ='sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p keepcenter'.format(box, config['data']['mslist'], dc)
+
+    cmd = 'sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p keepcenter'.format(box, config['data']['mslist'], dc)
     logger.info(cmd)
     subprocess.call(cmd, shell=True)
 
-logger.info('Restoring flags.')
-for ms in mses:
+    logger.info('Restoring flags.')
+    for ms in mses:
         cmd3 = 'restore_flagtable.py {:s}'.format(ms)
         logger.info(cmd3)
         subprocess.call(cmd3, shell=True)
@@ -152,10 +160,10 @@ if len(tapered_images):
 else:
     logger.info('Tapering data to target resolution of {:s}.'.format(config['image']['taper_full']))
     chan_out = (len(mses) // 4) + 1
-    cmd = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -channels-out {:d} -weight briggs {:s} -size 1024 1024 -scale 0.35asec -make-psf -fit-psf -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], chan_out, config['image']['robust_full'], config['image']['taper_full'], mses[0].split('.')[-1])
+    cmd = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -channels-out {:d} -weight briggs {:s} -size 1024 1024 -scale 0.35asec -make-psf -fit-psf -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']), config['image']['data_column'], chan_out, config['image']['robust_full'], config['image']['taper_full'], mses[0].split('.')[-1])
     logger.info(cmd)
     subprocess.call(cmd, shell=True)
-    for i,ms in enumerate(mses):
+    for i, ms in enumerate(mses):
         cmd = 'transfer_imaging_weight.py {:s}'.format(ms)
         logger.info(cmd)
         subprocess.call(cmd, shell=True)
@@ -201,14 +209,13 @@ else:
     subprocess.call(cmd, shell=True)
 
 logger.info('Making PyBDSF catalogue to select potential DDE calibrators.')
-import bdsf
 fitsname = 'image_dirin_SSD_init_natural_m2.int.restored.fits'
 detectimage = 'image_dirin_SSD_init_natural_m2.app.restored.fits'
 # Pull the reference frequency from the header.
 fhead = fits.open('image_dirin_SSD_init_natural_m2.int.restored.fits')
-restfrq= fhead[0].header['CRVAL3']
+restfrq = fhead[0].header['CRVAL3']
 # Run PyBDSF with standard SKSP settings.
-res = bdsf.process_image(fitsname, detection_image=detectimage, thresh_isl=4.0, thresh_pix=5.0, rms_box=(150,15), rms_map=True, mean_map='zero', ini_method='intensity', adaptive_rms_box=True, adaptive_thresh=150, rms_box_bright=(60,15), group_by_isl=False, group_tol=10.0, output_opts=True, output_all=True, atrous_do=True, atrous_jmax=4, flagging_opts=True, flag_maxsize_fwhm=0.5, advanced_opts=True, blank_limit=None, frequency=restfrq)
+res = bdsf.process_image(fitsname, detection_image=detectimage, thresh_isl=4.0, thresh_pix=5.0, rms_box=(150, 15), rms_map=True, mean_map='zero', ini_method='intensity', adaptive_rms_box=True, adaptive_thresh=150, rms_box_bright=(60, 15), group_by_isl=False, group_tol=10.0, output_opts=True, output_all=True, atrous_do=True, atrous_jmax=4, flagging_opts=True, flag_maxsize_fwhm=0.5, advanced_opts=True, blank_limit=None, frequency=restfrq)
 # Write out a catalog.
 res.write_catalog(outfile='skymodel_1asec_lbregion_pybdsf.csv', bbs_patches='source', catalog_type='gaul', format='csv')
 res.write_catalog(outfile='skymodel_1asec_lbregion_pybdsf.bbs', bbs_patches='source', catalog_type='gaul', format='bbs')
