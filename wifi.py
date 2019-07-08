@@ -152,7 +152,7 @@ if len(tapered_images):
 else:
     logger.info('Tapering data to target resolution of {:s}.'.format(config['image']['taper_full']))
     chan_out = (len(mses) // 4) + 1
-    cmd = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -weight briggs {:s} -size 1024 1024 -scale 0.35asec -make-psf -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], config['image']['robust_full'], config['image']['taper_full'], mses[0].split('.')[-1])
+    cmd = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -channels-out {:d} -weight briggs {:s} -size 1024 1024 -scale 0.35asec -make-psf -fit-psf -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(config['image']['wsclean_ncpu']), int(config['image']['wsclean_mem']),config['image']['data_column'], chan_out, config['image']['robust_full'], config['image']['taper_full'], mses[0].split('.')[-1])
     logger.info(cmd)
     subprocess.call(cmd, shell=True)
     for i,ms in enumerate(mses):
