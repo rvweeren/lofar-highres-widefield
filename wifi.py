@@ -66,7 +66,7 @@ def is_tapered():
     Returns:
         tapered (bool): `True` if tapering has been done, `False` otherwise.
     '''
-    tapered_images = glob.glob('wsclean_block*_taper*.fits')
+    tapered_images = glob.glob('wsclean_taper*.fits')
     tapered = len(tapered_images) > 0
     return tapered
 
