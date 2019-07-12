@@ -238,7 +238,7 @@ else:
     # Having a small pixel scale is important here, such that all baselines are considered during
     # weighting. WSClean automatically ignores all baselines that provide resolutions higher than
     # the given pixel size.
-    CMD = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -channels-out {:d} -weight briggs {:s} -size 1024 1024 -scale 0.05asec -make-psf -fit-beam -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(CONFIG['image']['wsclean_ncpu']), int(CONFIG['image']['wsclean_mem']), CONFIG['image']['data_column'], chan_out, CONFIG['image']['robust_full'], CONFIG['image']['taper_full'], MSES[0].split('.')[-1])
+    CMD = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -channels-out {:d} -weight briggs {:s} -size 1024 1024 -scale 0.05asec -minuvw-m 5000 -make-psf -fit-beam -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(CONFIG['image']['wsclean_ncpu']), int(CONFIG['image']['wsclean_mem']), CONFIG['image']['data_column'], chan_out, CONFIG['image']['robust_full'], CONFIG['image']['taper_full'], MSES[0].split('.')[-1])
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
     for i, ms in enumerate(MSES):
