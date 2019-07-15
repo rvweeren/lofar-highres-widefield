@@ -245,8 +245,9 @@ else:
         CMD = 'transfer_imaging_weight.py {:s}'.format(ms)
         LOGGER.info(CMD)
         subprocess.call(CMD, shell=True)
-    BEAM = get_beam('wsclean_taper-MFS-psf.fits')
-    DDF_RESTORING_BEAM = '[{maj:f},{min:f},{pa:f}'.format(BEAM[0], BEAM[1], BEAM[2])
+    #BEAM = get_beam('wsclean_taper-MFS-psf.fits')
+    #DDF_RESTORING_BEAM = '[{maj:f},{min:f},{pa:f}'.format(BEAM[0], BEAM[1], BEAM[2])
+    DDF_RESTORING_BEAM = '1.0'
 
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.int.restored.fits'):
     LOGGER.info('Initial widefield image already exists, not recreating.')
