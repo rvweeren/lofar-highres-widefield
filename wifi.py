@@ -429,6 +429,17 @@ msout.overwrite = True
 make_dde_directions(CATALOGUE, parset=PARSET)
 
 # Now split out all directions.
+# You should really do this on an SSD, otherwise it could take literal weeks.
+LOGGER.info('Splitting out DDE calibrators')
+LOGGER.info('If you are not running on an SSD and/or (preferrably) in a distributed fashion, be prepared to wait a long time!')
+
+if not os.path.isfile(CONFIG['solutions']['ddsols_h5']):
+    die('DDE solutions not found!')
+else:
+    LOGGER.info('Creating 1'' image with DD solutions.')
+    CMD = 'DDF.py --Output-Name=image_dd --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural_m.DicoModel --DDESolutions-DDSols={ddsols:s}'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM), ddsols=CONFIG['solutions']['ddsols_h5'])
+    LOGGER.info(CMD)
+    subprocess.call(CMD, shell=True)
 
 LOGGER.info('Pipeline finished successfully.')
 sys.exit(0)
