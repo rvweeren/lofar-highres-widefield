@@ -9,10 +9,12 @@ import subprocess
 import sys
 import traceback
 
+from astropy.io import ascii
 from astropy.io import fits
 
 import bdsf
 import numpy as np
+from make_extended_mask import make_extended_mask, merge_mask
 
 
 def die(reason=''):
@@ -70,6 +72,67 @@ def is_tapered():
     tapered = len(tapered_images) > 0
     return tapered
 
+def make_dde_directions(sourcecat, Speak_min = 0.025, parset='')
+    skymodel_csv = ascii.read(sourcecat, format='csv', header_start=4, data_start=5)
+
+    Speak = skymodel_csv['Peak_flux']
+    Speak_min = 0.0250
+    filter_100mJy_peak = Speak > Speak_min
+
+    sub_tab = skymodel_csv['Source_id', 'RA', 'DEC', 'Peak_flux'][filter_100mJy_peak]
+
+    # In case of multiple components of a single source being found, calculate the mean position.
+    positions = Table(names=['Source_id', 'RA', 'DEC'])
+
+    from scipy.spatial.distance import pdist, squareform
+    from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+    # Make an (N,2) array of directions and compute the distances between points.
+    pos = np.stack((list(sub_tab['RA']), list(sub_tab['DEC'])), axis=1)
+    distances = pdist(pos, 'euclidean')
+
+    # Cluster components based on the distance between them.
+    # Everything within 1 arcmin gets clustered into a direction.
+    Z = linkage(pos, method='complete', metric='euclidean')
+    clusters = fcluster(Z, 60. / 3600., criterion='distance')
+    dendrogram(Z)
+
+    # Loop over the clusters and merge them into single directions.
+    for c in np.unique(clusters):
+        idx = np.where(clusters == c)
+        i = idx[0][0]
+        comps = sub_tab[idx]
+        if len(comps) == 1:
+            # Nothing needs to merge with this direction.
+            positions.add_row((sub_tab['Source_id'][i], sub_tab['RA'][i], sub_tab['DEC'][i]))
+            continue
+        else:
+            ra_mean = np.mean(sub_tab['RA'][idx])
+            dec_mean = np.mean(sub_tab['DEC'][idx])
+            if (ra_mean not in positions['RA']) and (dec_mean not in positions['DEC']):
+                positions.add_row((sub_tab['Source_id'][i], ra_mean, dec_mean))
+            else:
+                print('Direction {:d} has been merged already.\n'.format(sub_tab['Source_id'][i]))
+    positions_25mJy = positions
+    print('{:d} sources with peak flux >{:f} Jy'.format(len(positions), Speak_min))
+
+    # Write parsets with 10 directions per parset.
+    print('DPPP friendly format:')
+    msnamelist = list(map(lambda s: 'P{:d}.ms'.format(int(s)), positions_25mJy['Source_id']))
+    print('msout.name=[' + ','.join(msnamelist) + ']')
+    msposlist = list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), positions_25mJy['RA', 'DEC']))
+    print('phasecenter=[' + ','.join(msposlist) + ']')
+    region_strs = map(lambda pos: 'fk5\ncircle({:f},{:f},{:f}) # color=red width=2 text="{:s}"'.format(*pos['RA','DEC'], 30. / 3600, str(pos['Source_id'])), positions_25mJy)
+    for i in range(len(msnamelist)//10):
+        with open('split_25mJy_{:02d}.parset'.format(i), 'w') as f:
+            output = PARSET + '\nmsout.name=[' + ','.join(msnamelist[10*i:10*(i+1)]) + ']\n' +\
+                     'shift.phasecenter=[' + ','.join(msposlist[10*i:10*(i+1)]) + ']\n'
+            f.write(output)
+
+    from regions import DS9Parser, write_ds9
+    parser = DS9Parser('\n'.join(list(region_strs)))
+    regions = parser.shapes.to_regions()
+
+    write_ds9(regions, 'pointings_25mJy.reg')
 
 def run_pybdsf(fitsname, detectimage):
     ''' Run PyBDSF on an image, using standard SKSP settings.
@@ -265,11 +328,20 @@ else:
     LOGGER.info(CMD)
     subprocess.call('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2', shell=True)
 
+if os.path.exists(os.getcwd() + '/extended-mask-high.fits'):
+    LOGGER.info('Extended emission mask already exists, not recreating.')
+else:
+    LOGGER.info('Creating extended emission mask from 6'' image.')
+    make_extended_mask(infile=CONFIG['subtract']['lotss_directory'] + '/image_full_ampphase_di_m.NS.app.restored.fits', fullresfile='image_dirin_SSD_init_natural.app.restored.fits', sizethresh=250, rootname='extended')
+    LOGGER.info('Extended emission mask saved as extended-mask-high.fits')
+    LOGGER.info('Merging with image-based mask.'
+    merge_mask(in1='extended-mask-high.fits', in2='image_dirin_SSD_init_natural.app.restored.fits.mask.fits', outfile='mask-merged-1.fits')
+
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.int.restored.fits'):
     LOGGER.info('Mask-cleaned image already exists, not recreating.')
 else:
     LOGGER.info('Cleaning deeper with mask.')
-    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=image_dirin_SSD.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
+    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=mask-merged-1.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
 
@@ -289,9 +361,74 @@ else:
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
 
-LOGGER.info('Making PyBDSF catalogue to select potential DDE calibrators.')
+LOGGER.info('Making PyBDSF catalogue of 1'' map.')
 
 run_pybdsf(fitsname='image_dirin_SSD_init_natural_m2.int.restored.fits', detectimage='image_dirin_SSD_init_natural_m2.app.restored.fits')
+
+IN_CATALOGUE = 'skymodel_1asec_lbregion_pybdsf.csv'
+# https://stackoverflow.com/questions/16414410/delete-empty-lines-using-sed
+subprocess.call("sed '/^[[:space:]]*$/d' {:s} > {:s}".format(IN_CATALOGUE, 'skymodel_1asec_lbregion_pybdsf.sedded.csv'), shell=True)
+
+CATALOGUE = 'skymodel_1asec_lbregion_pybdsf.sedded.csv'
+LOGGER.info('Wrote PyBDSF catalogue to {:s}'.format(CATALOGUE))
+
+LOGGER.info('Selecting directions for DDE calibrators.')
+
+if CONFIG['data'].getboolean('do_apply_kms'):
+    PARSET = '''numthreads=4
+    msout.storagemanager=dysco
+    msout.writefullresflag = False
+
+    steps=[explode]
+    explode.steps=[shift,avg1,applykms,apply1,apply2,adder,filter,averager,msout]
+    explode.replaceparms = [shift.phasecenter, msout.name]
+
+    applykms.type = applycal
+    applykms.solset = sol001
+    applykms.steps = [ac_amp, ac_phase]
+    applykms.ac_amp.correction = amplitude000
+    applykms.ac_phase.correction = phase000
+    '''
+else:
+    PARSET = '''numthreads=4
+    msout.storagemanager=dysco
+    msout.writefullresflag = False
+
+    steps=[explode]
+    explode.steps=[shift,avg1,apply1,apply2,adder,filter,averager,msout]
+    explode.replaceparms = [shift.phasecenter, msout.name]
+    '''
+
+PARSET += '''shift.type=phaseshift
+apply1.type = applycal
+apply1.parmdb = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
+apply1.solset = sol001
+apply1.correction = phase000
+
+apply2.type = applycal
+apply2.parmdb = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
+apply2.solset = sol001
+apply2.steps = [ac2_amp, ac2_phase]
+apply2.ac2_amp.correction = amplitude000
+apply2.ac2_phase.correction = phase000
+
+adder.type=stationadder
+adder.stations={ST001:'CS*'}
+
+filter.type=filter
+filter.baseline=^[C]S*&&
+filter.remove=True
+
+averager.type=averager
+averager.freqstep=4
+averager.timestep=15
+
+msout.overwrite = True
+'''
+
+make_dde_directions(CATALOGUE, parset=PARSET)
+
+# Now split out all directions.
 
 LOGGER.info('Pipeline finished successfully.')
 sys.exit(0)
