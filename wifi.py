@@ -134,7 +134,7 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset='')
 
     write_ds9(regions, 'pointings_25mJy.reg')
 
-def run_pybdsf(fitsname, detectimage):
+def run_pybdsf(fitsname, detectimage, outcat='skymodel_1asec_lbregion_pybdsf'):
     ''' Run PyBDSF on an image, using standard SKSP settings.
 
     Two catalogues are written when finished:
@@ -153,8 +153,8 @@ def run_pybdsf(fitsname, detectimage):
     # Run PyBDSF with standard SKSP settings.
     res = bdsf.process_image(fitsname, detection_image=detectimage, thresh_isl=4.0, thresh_pix=5.0, rms_box=(150, 15), rms_map=True, mean_map='zero', ini_method='intensity', adaptive_rms_box=True, adaptive_thresh=150, rms_box_bright=(60, 15), group_by_isl=False, group_tol=10.0, output_opts=True, output_all=True, atrous_do=True, atrous_jmax=4, flagging_opts=True, flag_maxsize_fwhm=0.5, advanced_opts=True, blank_limit=None, frequency=restfrq)
     # Write out a catalog.
-    res.write_catalog(outfile='skymodel_1asec_lbregion_pybdsf.csv', bbs_patches='source', catalog_type='gaul', format='csv')
-    res.write_catalog(outfile='skymodel_1asec_lbregion_pybdsf.bbs', bbs_patches='source', catalog_type='gaul', format='bbs')
+    res.write_catalog(outfile=outcat + '.csv', bbs_patches='source', catalog_type='gaul', format='csv')
+    res.write_catalog(outfile=outcat + '.bbs', bbs_patches='source', catalog_type='gaul', format='bbs')
 
 
 # One should have run `genericpipeline.py -d -c pipeline.cfg LB-Split-Calibrators.parset` before running this.
@@ -316,7 +316,7 @@ if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.int.restored.fits
     LOGGER.info('Initial widefield image already exists, not recreating.')
 else:
     LOGGER.info('Creating {:s}" widefield image.'.format(CONFIG['image']['taper_full']))
-    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
+    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=1 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
 
@@ -341,29 +341,13 @@ if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.int.restored.fi
     LOGGER.info('Mask-cleaned image already exists, not recreating.')
 else:
     LOGGER.info('Cleaning deeper with mask.')
-    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=5 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=mask-merged-1.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
-    LOGGER.info(CMD)
-    subprocess.call(CMD, shell=True)
-
-if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits'):
-    LOGGER.info('Second mask already exists, not recreating.')
-else:
-    LOGGER.info('Creating second mask.')
-    CMD = 'MakeMask.py --RestoredIm=image_dirin_SSD_init_natural_m.app.restored.fits --Th=5 --Box=50,2'
-    LOGGER.info(CMD)
-    subprocess.call(CMD, shell=True)
-
-if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m2.int.restored.fits'):
-    LOGGER.info('Final image already exists, not recreating.')
-else:
-    LOGGER.info('Cleaning again with second mask.')
-    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural_m2 --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural_m.DicoModel --Cache-Dirty=forceresidual'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
+    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=mask-merged-1.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM))
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
 
 LOGGER.info('Making PyBDSF catalogue of 1'' map.')
 
-run_pybdsf(fitsname='image_dirin_SSD_init_natural_m2.int.restored.fits', detectimage='image_dirin_SSD_init_natural_m2.app.restored.fits')
+run_pybdsf(fitsname='image_dirin_SSD_init_natural_m.int.restored.fits', detectimage='image_dirin_SSD_init_natural_m.app.restored.fits')
 
 IN_CATALOGUE = 'skymodel_1asec_lbregion_pybdsf.csv'
 # https://stackoverflow.com/questions/16414410/delete-empty-lines-using-sed
@@ -430,16 +414,23 @@ make_dde_directions(CATALOGUE, parset=PARSET)
 
 # Now split out all directions.
 # You should really do this on an SSD, otherwise it could take literal weeks.
-LOGGER.info('Splitting out DDE calibrators')
+LOGGER.info('Splitting out DDE calibrators [not yet implemented]')
 LOGGER.info('If you are not running on an SSD and/or (preferrably) in a distributed fashion, be prepared to wait a long time!')
 
 if not os.path.isfile(CONFIG['solutions']['ddsols_h5']):
     die('DDE solutions not found!')
 else:
-    LOGGER.info('Creating 1'' image with DD solutions.')
-    CMD = 'DDF.py --Output-Name=image_dd --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural_m.DicoModel --DDESolutions-DDSols={ddsols:s}'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM), ddsols=CONFIG['solutions']['ddsols_h5'])
+    LOGGER.info('Creating final 1'' image with DD solutions.')
+    CMD = 'DDF.py --Output-Name=image_dd --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=6 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 0.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=image_dirin_SSD_init_natural_m.app.restored.fits.mask.fits --DDESolutions-DDSols={ddsols:s}'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full'], beam=DDF_RESTORING_BEAM), ddsols=CONFIG['solutions']['ddsols_h5'])
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
+
+LOGGER.info('Making PyBDSF catalogue of DD calibrated 1'' map.')
+
+run_pybdsf(fitsname='image_dirin_SSD_init_natural_m.int.restored.fits', detectimage='image_dirin_SSD_init_natural_m.app.restored.fits', outcat='catalogue_1asec_final_dd')
+
+IN_CATALGOUE = 'catalogue_1asec_final_dd.csv'
+subprocess.call("sed '/^[[:space:]]*$/d' {:s} > {:s}".format(IN_CATALOGUE, 'catalogue_1asec_final_dd.sedded.csv'), shell=True)
 
 if CONFIG['mosaic'].getboolean('do_mosaic'):
     LOGGER.info('Creating directions for full FoV 0.3'' imaging.')
