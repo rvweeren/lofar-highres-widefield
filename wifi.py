@@ -441,8 +441,10 @@ else:
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
 
+if CONFIG['mosaic'].getboolean('do_mosaic'):
+    LOGGER.info('Creating directions for full FoV 0.3'' imaging.')
+
+
 LOGGER.info('Pipeline finished successfully.')
 sys.exit(0)
 
-if CONFIG['mosaic'].getboolean('do_mosaic'):
-    LOGGER.info('0.2" mosaic requested. [NOT YET IMPLEMENTED]')

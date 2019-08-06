@@ -1,17 +1,21 @@
 # A LOFAR Long Baseline Widefield Imaging Pipeline
-This is an imaging pipeline to produce high quality 1'' images of LOFAR observations including the international stations. It aims to be a pipeline similar as what the ddf-pipeline is for the Dutch LOFAR, and uses DDFacet, DP3 and WSClean.
+This is an imaging pipeline to produce high quality high resolution widefield images of LOFAR observations including the international stations. It aims to be a pipeline similar as what the ddf-pipeline is for the Dutch LOFAR, and uses DDFacet, DP3 and WSClean.
 
 The end result of the pipeline is currently a 1'' map that is direction-independently calibrated. As input, it requires a dataset, a square DS9 region centered on the pointing center, the corresponding LoTSS reduction and solutions towards an infield long-baseline calibrator. Given this, the pipeline will then:
 
-1. apply the LoTSS solutions to CS/RS, to arrive at the correct DI calibrated data.
-2. subtract all sources outside of a given region on the center of the field, using the DD solutions from LoTSS.
-3. apply the infield calibrator solutions to DI-correct the international stations.
-4. image the central region of the field at 1'' angular resolution.
+1. Apply the LoTSS solutions to CS/RS, to arrive at the correct DI calibrated data.
+2. Subtract all sources outside of a given region on the center of the field, using the DD solutions from LoTSS.
+3. Apply the infield calibrator solutions to DI-correct the international stations.
+4. Image the central region of the field at 1'' angular resolution.
+5. Produce a PyBDSF catalogue of the image.
+6. Produce DP3 parsets to split out potential DDE calibrators.
 
 To run the pipeline, set the appropriate settings in the config file and run:
 ```
 wifi.py lb_widefield.cfg
 ```
+
+Tyipcal runtime on a Leiden node is about a week for the 1'' DI image.
 
 Requirements
 ------------
