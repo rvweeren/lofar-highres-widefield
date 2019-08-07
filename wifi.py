@@ -9,10 +9,13 @@ import subprocess
 import sys
 import traceback
 
+from astropy import units as u
 from astropy.io import ascii
 from astropy.io import fits
+from regions import DS9Parser, write_ds9
 
 import bdsf
+import casacore.tables as ct
 import numpy as np
 from make_extended_mask import make_extended_mask, merge_mask
 
@@ -133,6 +136,38 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset='')
     regions = parser.shapes.to_regions()
 
     write_ds9(regions, 'pointings_25mJy.reg')
+
+def make_tiles(ra, dec, tile_spacing=0.625, tile_facet_size=0.7):
+    ''' Create the tiling for a 0.3'' mosaic of the central 2.5 degree.
+    
+    Args:
+        ra (float): right ascension of the pointing center.
+        dec (float): declination of the pointing center.
+    Returns:
+        facets (ndarray): a 4 x 4 x 2 array with the central RA and DEC of the tiles.
+    '''
+    spacing = tile_spacing * u.degree
+    # Have some overlap
+    facet_size = tile_facet_size * u.degree
+    facets = np.zeros((4,4,2)) * u.degree#, dtype=(float, 2)) * u.degree
+    facetlist = []
+    k = 1
+    for i in range(4):
+        for j in range(4):
+            RA = phasecenter.ra + (spacing * (j-1.5) / np.cos((phasecenter.dec + spacing*(i-1.5)).rad))
+            DEC = phasecenter.dec + (spacing * (i-1.5))
+            facets[i, j, 0] = RA
+            facets[i, j, 1] = DEC
+            facetlist.append((RA.deg,DEC.deg))
+            PARSET = 'msout.storagemanager=dysco\nmsout.storagemanager.databitrate=4\nmsout.storagemanager.weightbitrate=8\nsteps=[shift,avg]\nshift.type = phaseshift\nshift.phasecenter = [{:f}deg, {:f}deg]\navg.type = average\navg.timeresolution = 4\navg.freqresolution = 48.82kHz'.format(RA.deg, DEC.deg)
+            with open('shift_to_facet_{:d}.parset'.format(k), 'w') as f:
+                f.write(PARSET)
+            k += 1
+    region_strs = map(lambda pos: 'fk5\nbox({:f},{:f},{:f},{:f},0) # color=green width=4 text=""'.format(*pos, facet_size.value, facet_size.value), facetlist)
+    parser = DS9Parser('\n'.join(list(region_strs)))
+    regions = parser.shapes.to_regions()
+    write_ds9(regions, 'facets.reg')
+    return facets
 
 def run_pybdsf(fitsname, detectimage, outcat='skymodel_1asec_lbregion_pybdsf'):
     ''' Run PyBDSF on an image, using standard SKSP settings.
@@ -271,7 +306,7 @@ if CONFIG['data'].getboolean('do_apply_infield'):
         dc = CONFIG['data']['data_column']
     for ms in MSES:
         sols_p = CONFIG['solutions']['infield_sols_p']
-        if not CONFIG['solutions']['infield_phase_only']:
+        if not CONFIG['solutions'].getboolean(['infield_phase_only']):
             sols_ap = CONFIG['solutions']['infield_sols_ap']
             try:
                 with open('apply_infield_solutions.parset', 'w') as f:
@@ -432,10 +467,11 @@ run_pybdsf(fitsname='image_dirin_SSD_init_natural_m.int.restored.fits', detectim
 IN_CATALGOUE = 'catalogue_1asec_final_dd.csv'
 subprocess.call("sed '/^[[:space:]]*$/d' {:s} > {:s}".format(IN_CATALOGUE, 'catalogue_1asec_final_dd.sedded.csv'), shell=True)
 
-if CONFIG['mosaic'].getboolean('do_mosaic'):
-    LOGGER.info('Creating directions for full FoV 0.3'' imaging.')
+if not CONFIG['mosaic'].getboolean('do_mosaic'):
+    LOGGER.info('Pipeline finished successfully.')
+    sys.exit(0)
 
-
-LOGGER.info('Pipeline finished successfully.')
-sys.exit(0)
-
+LOGGER.info('Creating directions for full FoV 0.3'' imaging.')
+tab = ct.taql('SELECT REFERENCE_DIR FROM {:s}::FIELD'.format(MSES[0]))
+PHASECENTER = tab.getcol('REFERENCE_DIR').squeeze()
+make_tiles(*PHASECENTER)
