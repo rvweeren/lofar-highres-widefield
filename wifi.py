@@ -475,3 +475,11 @@ LOGGER.info('Creating directions for full FoV 0.3'' imaging.')
 tab = ct.taql('SELECT REFERENCE_DIR FROM {:s}::FIELD'.format(MSES[0]))
 PHASECENTER = tab.getcol('REFERENCE_DIR').squeeze()
 make_tiles(*PHASECENTER)
+
+# Make phaseshifted copies of each tile and image.
+DPPP_PARSETS = sorted(glob.glob('shift_to_facet_*.parset'))
+for i, p in enumerate(DPPP_PARSETS):
+    for ms in MSES:
+        subprocess.call('DPPP {:s} msin={:s} msout={:s}'.format(p, ms, ms[:-3] + '.facet_{:02d}'.format(i), shell=True)
+    # Image here.
+    # WSClean with IDG on GPU, or DDFacet?
