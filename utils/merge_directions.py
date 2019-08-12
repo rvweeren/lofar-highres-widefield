@@ -47,7 +47,15 @@ ss_antennas = ss.obj.antenna.read()
 directions = []
 
 vals = st.getValues()[0]
-vals_reordered = reorderAxes(vals, st.getAxesNames(), ['dir', 'ant', 'freq', 'time'])
+AN = st.getAxesNames()
+axes_new = ['ant', 'freq', 'time']
+if 'dir' in AN:
+    axes_new = ['dir'] + axes_new
+if 'pol' in AN:
+    axes_new = ['pol'] + axes_new
+
+vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
+
 if convert_tec:
     print('Determining frequency grid...')
     ff = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_first + '::SPECTRAL_WINDOW')
@@ -88,12 +96,11 @@ for i, h5 in enumerate(args.h5parms):
         print('Direction {:f},{:f} already exists, adding solutions instead.'.format(*source_coords))
         idx = directions.index(d)
         d = 'Dir{:02d}'.format(idx)
-    print(st.getAxisValues('dir'))
     if st.getType() == 'tec' and convert_tec:
         # Convert tec to phase.
         tec_tmp = st.getValues()[0]
         #tec = reorderAxes(tec_tmp, st.getAxesNames(), ['time', 'freq', 'ant', 'dir'])
-        tec = reorderAxes(tec_tmp, st.getAxesNames(), ['dir', 'ant', 'freq', 'time'])
+        tec = reorderAxes(tec_tmp, st.getAxesNames(), axes_new)
         # -1 assumes the expected shape along the frequency axis.
         freqs = ax_freq.reshape(1, 1, 1, -1, 1)
         tecphase = (-8.4479745e9 * tec / freqs)
@@ -105,30 +112,38 @@ for i, h5 in enumerate(args.h5parms):
             phases = np.append(phases, tp, axis=1)
     elif st.getType() == 'tec' and not convert_tec:
         tec_tmp = st.getValues()[0]
-        tec = reorderAxes(tec_tmp, st.getAxesNames(), ['dir', 'ant', 'freq', 'time'])[0, :, 0, :]
+        if 'dir' in axes_new:
+            # TEC will never have a polarization axis and has only one frequency, so the latter indexing can stay: first direction, all antennas, first frequency, all times.
+            tec = reorderAxes(tec_tmp, st.getAxesNames(), axes_new)[0, :, 0, :]
+        else:
+            tec = reorderAxes(tec_tmp, st.getAxesNames(), axes_new)
         # -1 assumes the expected shape along the frequency axis.
         tp = interp_along_axis(tec, st.getAxisValues('time'), ax_time, -1)
         tp = tp.reshape(-1, *tp.shape)
         # Now add the tecs to the total phase correction for this direction.
         if idx == 0:
-            # Axis order is pol,dir,ant,time.
+            # Axis order is dir,ant,time.
             # Set the first direction.
-            print(tp.shape)
-            print(phases[idx, :, :].shape)
-            phases[idx, :, :] += tp[0, :, :]
+            if 'dir' in axes_new:
+                phases[idx, :, :] += tp[0, :, :]
+            else:
+                phases[idx, :, :] = tp
         elif idx > 0:
             phases = np.append(phases, tp, axis=0)
     elif st.getType() == 'phase':
-        # Convert tec to phase.
         phase_tmp = st.getValues()[0]
-        #tec = reorderAxes(tec_tmp, st.getAxesNames(), ['time', 'freq', 'ant', 'dir'])
-        phase = reorderAxes(phase_tmp, st.getAxesNames(), ['dir', 'ant', 'freq', 'time'])
-        # -1 assumes the expected shape along the frequency axis.
-        #freqs = ax_freq.reshape(1, -1, 1, 1, 1)
+        phase = reorderAxes(phase_tmp, st.getAxesNames(), axes_new)
         tp = interp_along_axis(phase, st.getAxisValues('time'), ax_time, -1)
         # Now add the phases to the total phase correction for this direction.
-        #phases[:, :, :, i] += tp[..., 0]
-        phases[0, idx, :, :, :] += tp[0, ...]
+        if pol in axes_new:
+            polidx = range(phases.shape[0])
+        else:
+            polidx = 0
+        for pidx in polidx:
+            if 'dir' in axes_new:
+                phases[pidx, idx, :, :, :] += tp[0, ...]
+            else:
+                phases[pidx, idx, :, :, :] += tp
     h5.close()
 
 # Create the output h5parm.
