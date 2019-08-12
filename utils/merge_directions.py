@@ -53,6 +53,7 @@ if 'dir' in AN:
     axes_new = ['dir'] + axes_new
 if 'pol' in AN:
     axes_new = ['pol'] + axes_new
+    polarizations = st.getAxisValues('pol')
 
 vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
 
@@ -150,6 +151,10 @@ for i, h5 in enumerate(args.h5parms):
 weights = np.ones(phases.shape)
 sources = np.array(sourcelist, dtype=[('name', 'S128'), ('dir', '<f4', (2,))])
 solsetout.obj.source.append(sources)
+if args.soltab2merge == 'phase' and len(polarizations) > 0:
+    solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[polarizations, directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
+elif args.soltab2merge == 'phase' and len(polarizations) == 0:
+    solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0,...], weights=weights)
 if not convert_tec:
     solsetout.makeSoltab('tec', axesNames=['dir', 'ant', 'time'], axesVals=[directions, antennas, ax_time], vals=phases, weights=weights)
 elif convert_tec:
