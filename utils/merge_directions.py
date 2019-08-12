@@ -78,7 +78,7 @@ if append_to_solset:
     solsetout = h5out.makeSolset(append_to_solset)
 else:
     # Try to make a new one.
-    solsetout = h5out.makeSolset('sol000')
+    solsetout = h5out.getSolset('sol000')
 antennasout = solsetout.getAnt()
 antennatable = solsetout.obj._f_get_child('antenna')
 antennatable.append(ss.obj.antenna.read())
