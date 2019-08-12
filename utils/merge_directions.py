@@ -57,7 +57,7 @@ if 'pol' in AN:
 
 vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
 
-if convert_tec:
+if convert_tec or (not convert_tec and 'phase' in args.soltab2merge):
     print('Determining frequency grid...')
     ff = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_first + '::SPECTRAL_WINDOW')
     freq_first = ff.getcol('CHAN_FREQ')[0][0]
@@ -158,5 +158,6 @@ elif args.soltab2merge == 'phase' and len(polarizations) == 0:
 if not convert_tec:
     solsetout.makeSoltab('tec', axesNames=['dir', 'ant', 'time'], axesVals=[directions, antennas, ax_time], vals=phases, weights=weights)
 elif convert_tec:
-    solsetout.makeSoltab('phase', axesNames=['pol', 'dir', 'ant', 'freq', 'time'], axesVals=[['XX'], directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
+    #solsetout.makeSoltab('phase', axesNames=['pol', 'dir', 'ant', 'freq', 'time'], axesVals=[['XX'], directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
+    solsetout.makeSoltab('phase', axesNames=['dir', 'ant', 'freq', 'time'], axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0,...], weights=weights)
 h5out.close()
