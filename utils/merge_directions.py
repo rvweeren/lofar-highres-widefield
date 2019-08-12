@@ -24,7 +24,7 @@ parser.add_argument('--soltab', dest='soltab2merge', description='SolTab of the 
 parser.add_argument('--solset-in', dest='solsetin', description='SolSet to take the soltab from.')
 parser.add_argument('--h5parm-out', dest='h5out', description='Output H5parm with all directions present.')
 parser.add_argument('--convert-tec', dest='convert_tec', action='store_true', default=False, description='Convert TEC values to their corresponding phase corrections base on the frequencies in the Measurement Sets.')
-parset.add_argument('--append-to-solset', dest='append_to_solset', default='', description='Append the new soltab to the given solset instead of creating a new one.')
+parser.add_argument('--append-to-solset', dest='append_to_solset', default='', description='Append the new soltab to the given solset instead of creating a new one.')
 args = parser.parse_args()
 convert_tec = args.convert_tec
 
