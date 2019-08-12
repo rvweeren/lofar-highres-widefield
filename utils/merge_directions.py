@@ -36,6 +36,7 @@ ss = h5.getSolset('sol000')
 st = ss.getSoltab('tec000')
 print('Determining time grid...')
 ax_time = st.getAxisValues('time')
+h5.close()
 
 h5 = h5parm.h5parm(args.h5parms[0])
 ss = h5.getSolset(args.solsetin)
