@@ -69,7 +69,7 @@ if convert_tec:
     ax_freq = np.arange(freq_first, freq_last + freq_spacing, freq_spacing)
     phases = np.zeros((1, 1, len(antennas), len(ax_freq), len(ax_time)))
 elif not convert_tec:
-    phases = np.zeros((1, len(antennas), len(ax_time)))
+    phases = np.zeros(vals_reordered.shape)
 
 h5out = h5parm.h5parm(args.h5out, readonly=False)
 solsetout = h5out.makeSolset('sol000')
