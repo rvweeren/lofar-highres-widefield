@@ -40,15 +40,22 @@ phasecenter = t.getcol('REFERENCE_DIR').squeeze()
 print(phasecenter)
 t.close()
 # Time is stored as MJD, convert from seconds to days here as that's what FITS wants.
-t = ct.taql('SELECT TIME FROM {ms:s}'.format(ms=ms))
-time = t.getcol('TIME')
-stime = time / (24 * 60 * 60)
-dtime = (time[1] - time[0]) / (24 * 60 * 60)
-t.close()
+#t = ct.taql('SELECT DISTINCT TIME FROM {ms:s}'.format(ms=ms))
+#time = t.getcol('TIME')
+#stime = time[0] 
+#dtime = (time[1] - time[0]) / (24. * 60 * 60)
+#dtime = 60.
+#t.close()
+h5 = h5parm.h5parm(h5p)
+ss = h5.getSolset('sol000')
+st = ss.getSoltab('tec000')
+time = st.getAxisValues('time')
+stime = time[0] 
+dtime = time[1] - time[0]
+
 Nantenna = len(names)
-Ntimes = 480 # 60s timeslots for an 8 hour pointing
-# Pull values from the measurement set normally.
-# Pull values from the measurement set normally.
+Ntimes = len(time) # 60s timeslots for an 8 hour pointing
+# Set the frequency axis (that TEC doens't use) to 150 MHz as central frequency with 50 MHz of bandwidth.
 header='''SIMPLE  =                    T / file does conform to FITS standard
 BITPIX  =                  -32 / number of bits per data pixel
 NAXIS   =                    5 / number of data axes
@@ -59,12 +66,12 @@ NAXIS4  =                    1 / length of FREQ axis
 NAXIS5  =                   {ntimes:d} / length of TIME axis
 EXTEND  =                    T / FITS dataset may contain extensions
 CTYPE1  = 'RA---SIN'           / Right ascension angle cosine
-CRPIX1  =                 65.
+CRPIX1  =                 64.
 CRVAL1  =          {ra:f}
 CDELT1  =              -0.0195
 CUNIT1  = 'deg     '
 CTYPE2  = 'DEC--SIN'           / Declination angle cosine
-CRPIX2  =                 65.
+CRPIX2  =                 64.
 CRVAL2  =     {dec:f}
 CDELT2  =               0.0195
 CUNIT2  = 'deg     '
@@ -79,13 +86,13 @@ CUNIT4  = 'Hz      '
 CTYPE5  = 'TIME    '
 CRPIX5  =                   1.
 CRVAL5  =                   {stime:f} / Should be an AIPS time
-CDELT5  =                  {dtime:f}'''.format(nant=Nantenna, ntimes=Ntimes, ra=np.rad2deg(phasecenter[0]), dec=np.rad2deg(phasecenter[1]), cfreq=144627380.37109, dfreq=48828.1, stime=5038110492.002781, dtime=60.)
+CDELT5  =                  {dtime:f}'''.format(nant=Nantenna, ntimes=Ntimes, ra=np.rad2deg(phasecenter[0]), dec=np.rad2deg(phasecenter[1]), cfreq=150e6, dfreq=100e6, stime=stime, dtime=dtime)
 
 # 4ch/4s data
 # Frequency has length one, since it is TEC.
 #data = np.zeros((128, 128, Nantenna, 1, Ntimes))
 # FITS is transposed compared to Numpy.
-data = np.zeros((Ntimes, 1, Nantenna, 128, 128))
+data = np.zeros((Ntimes, 1, Nantenna, 128, 128), dtype=np.float32)
 
 # Read in h5parm.
 h5 = h5parm.h5parm(h5p)
@@ -101,8 +108,8 @@ for d, c in ss.getSou().items():
     RAd, DECd = np.rad2deg(c)
     print('Adding direction {:s} at {:f},{:f}'.format(d, RAd, DECd))
     pixel_coords = wcs.wcs_world2pix(RAd, DECd, 0)
-    X = int(pixel_coords[0])
-    Y = int(pixel_coords[1])
+    X = int(np.around(pixel_coords[0]))
+    Y = int(np.around(pixel_coords[1]))
     print('== Direction corresponds to (x, y) = ({:d}, {:d})'.format(X, Y))
     # Fill it with the solutions for each antenna.
     for istation, station in enumerate(names):
@@ -141,11 +148,11 @@ for i, a in enumerate(names):
     invalid_cell_mask = np.where(adata == 0, 1, 0)
     indices = ndimage.distance_transform_edt(invalid_cell_mask, return_distances=False, return_indices=True)
     data_int[:, :, i, :, :] = adata[tuple(indices)]
-    #for j in range(Ntimes):
-    #    plot_screen(data_int[j, 0, i, :, :], title=a, prefix=a, suffix='{:03d}'.format(j), wcs=wcs)
+    #if 'CS' not in a:
+    #    for j in range(Ntimes):
+    #        plot_screen(data_int[j, 0, i, :, :], title=a, prefix=a, suffix='{:03d}'.format(j), wcs=wcs)
 hdu = fits.PrimaryHDU(header=H)
 hdu.data = data_int
 hdu.writeto('tecscreen_interpolated.fits')
-print(data_int.shape)
 print('Finished interpolating.')
 

@@ -449,8 +449,8 @@ make_dde_directions(CATALOGUE, parset=PARSET)
 
 # Now split out all directions.
 # You should really do this on an SSD, otherwise it could take literal weeks.
-LOGGER.info('Splitting out DDE calibrators [not yet implemented]')
-LOGGER.info('If you are not running on an SSD and/or (preferrably) in a distributed fashion, be prepared to wait a long time!')
+LOGGER.info('[Not doing this] Splitting out DDE calibrators [not yet implemented]')
+LOGGER.warning('NOTE: If you are not running on an SSD and/or (preferrably) in a distributed fashion, be prepared to wait a long time!')
 
 if not os.path.isfile(CONFIG['solutions']['ddsols_h5']):
     die('DDE solutions not found!')
