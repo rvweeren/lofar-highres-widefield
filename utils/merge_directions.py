@@ -22,7 +22,7 @@ parser.add_argument('--mssuffix', dest='mssuffix', default='ms', description='Su
 parser.add_argument('--h5parms', dest='h5parms', nargs='+', description='Input H5parms to merge as directions, where each h5parm is one direction.')
 parser.add_argument('--soltab', dest='soltab2merge', description='SolTab of the H5parms to merge.')
 parser.add_argument('--solset-in', dest='solsetin', description='SolSet to take the soltab from.')
-parser.add_argument('--h5parm-out', dest='h5out', 'Output H5parm with all directions present.')
+parser.add_argument('--h5parm-out', dest='h5out', description='Output H5parm with all directions present.')
 parser.add_argument('--convert-tec', dest='convert_tec', action='store_true', default=False, description='Convert TEC values to their corresponding phase corrections base on the frequencies in the Measurement Sets.')
 args = parser.parse_args()
 convert_tec = args.convert_tec
