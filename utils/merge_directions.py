@@ -74,11 +74,11 @@ elif not convert_tec:
     phases = np.zeros(vals_reordered.shape)
 
 h5out = h5parm.h5parm(args.h5out, readonly=False)
-if append_to_solset:
+if args.append_to_solset:
     solsetout = h5out.makeSolset(append_to_solset)
 else:
     # Try to make a new one.
-    solsetout = h5out.getSolset('sol000')
+    solsetout = h5out.makeSolset('sol000')
 antennasout = solsetout.getAnt()
 antennatable = solsetout.obj._f_get_child('antenna')
 antennatable.append(ss.obj.antenna.read())
@@ -159,10 +159,12 @@ solsetout.obj.source.append(sources)
 if args.soltab2merge == 'phase' and len(polarizations) > 0:
     solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[polarizations, directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
 elif args.soltab2merge == 'phase' and len(polarizations) == 0:
+    weights = np.ones(phases[0,...].shape)
     solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0,...], weights=weights)
 if not convert_tec:
     solsetout.makeSoltab('tec', axesNames=['dir', 'ant', 'time'], axesVals=[directions, antennas, ax_time], vals=phases, weights=weights)
 elif convert_tec:
+    weights = np.ones(phases[0,...].shape)
     #solsetout.makeSoltab('phase', axesNames=['pol', 'dir', 'ant', 'freq', 'time'], axesVals=[['XX'], directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
     solsetout.makeSoltab('phase', axesNames=['dir', 'ant', 'freq', 'time'], axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0,...], weights=weights)
 h5out.close()
