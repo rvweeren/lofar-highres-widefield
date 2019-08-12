@@ -32,7 +32,7 @@ mslist = sorted(glob.glob(args.msdir + '/*.' + args.mssuffix))
 ms_first = mslist[0]
 ms_last = mslist[-1]
 
-h5 = args.h5parms[0]
+h5 = h5parm.h5parm(args.h5parms[0])
 ss = h5.getSolset('sol000')
 if 'tec000' in ss.getSoltabNames():
     st = ss.getSoltab('tec000')
