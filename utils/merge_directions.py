@@ -70,9 +70,8 @@ if 'pol' in AN:
 
 vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
 
-if convert_tec or (not convert_tec and 'phase' in args.soltab2merge):
+if 'phase' in args.soltab2merge:
     print('Determining frequency grid...')
-    print('Determining time axis...')
     len_freq_old = 0
     ax_freq = None
     for ih5 in args.h5parms:
@@ -94,7 +93,19 @@ if convert_tec or (not convert_tec and 'phase' in args.soltab2merge):
         phases = np.zeros((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
     else:
         phases = np.zeros((1, len(antennas), len(ax_freq), len(ax_time)))
-        
+elif convert_tec and 'tec' in args.soltab2merge:
+    print('Determining frequency grid...')
+    ff = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_first + '::SPECTRAL_WINDOW')
+    freq_first = ff.getcol('CHAN_FREQ')[0][0]
+    freq_spacing = ff.getcol('CHAN_WIDTH')[0][0]
+    ff.close()
+
+    fl = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_last + '::SPECTRAL_WINDOW')
+    freq_last = fl.getcol('CHAN_FREQ')[0][0]
+    print(freq_first, freq_last, freq_spacing)
+    ax_freq = np.arange(freq_first, freq_last + freq_spacing, freq_spacing)
+    phases = np.zeros((1, 1, len(antennas), len(ax_freq), len(ax_time)))
+    print('Frequency axis taken Measurement Sets with a solution interval of {:f} Hz.'.format(ax_freq[1]-ax_freq[0]))
 elif not convert_tec:
     phases = np.zeros(vals_reordered.shape)
 
@@ -149,17 +160,21 @@ for i, h5 in enumerate(args.h5parms):
             tec = reorderAxes(tec_tmp, st.getAxesNames(), axes_new)[0, :, 0, :]
         else:
             tec = reorderAxes(tec_tmp, st.getAxesNames(), axes_new)
-        # -1 assumes the expected shape along the frequency axis.
+        # -1 assumes the expected shape along that axis.
+        print(axes_new)
         tp = interp_along_axis(tec, st.getAxisValues('time'), ax_time, -1)
-        tp = tp.reshape(-1, *tp.shape)
+        tp = tp.reshape(1, tp.shape[0], 1, tp.shape[1])
         # Now add the tecs to the total phase correction for this direction.
         if idx == 0:
             # Axis order is dir,ant,time.
             # Set the first direction.
+            print(phases.shape)
+            print(phases[idx, :, :].shape)
+            print(tp.shape)
             if 'dir' in axes_new:
-                phases[idx, :, :] += tp[0, :, :]
+                phases[idx, :, :, :] += tp[0, ...]
             else:
-                phases[idx, :, :] = tp
+                phases[idx, :, :] += tp
         elif idx > 0:
             phases = np.append(phases, tp, axis=0)
     elif st.getType() == 'phase':
