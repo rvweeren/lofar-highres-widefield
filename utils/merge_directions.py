@@ -32,15 +32,24 @@ mslist = sorted(glob.glob(args.msdir + '/*.' + args.mssuffix))
 ms_first = mslist[0]
 ms_last = mslist[-1]
 
-h5 = h5parm.h5parm(args.h5parms[0])
-ss = h5.getSolset('sol000')
-if 'tec000' in ss.getSoltabNames():
-    st = ss.getSoltab('tec000')
-elif 'phase000' in ss.getSoltabNames():
-    st = ss.getSoltab('phase000')
-print('Determining time grid...')
-ax_time = st.getAxisValues('time')
-h5.close()
+print('Determining time axis...')
+len_time_old = 0
+ax_time = None
+for ih5 in args.h5parms:
+    th5 = h5parm.h5parm(ih5)
+    ss = th5.getSolset('sol000')
+    if 'tec000' in ss.getSoltabNames():
+        st = ss.getSoltab('tec000')
+    elif 'phase000' in ss.getSoltabNames():
+        st = ss.getSoltab('phase000')
+    ax_time_temp = st.getAxisValues('time')
+    if len(ax_time_temp) > len_time_old:
+        # Longer time axis meas a shorter solution interval was used.
+        ax_time = ax_time_temp
+        len_time_old = len(ax_time)
+        name_time = ih5
+    th5.close()
+print('Fastest time axis taken from {:s} with a solution interval of {:f} s.'.format(name_time, ax_time[1]-ax_time[0]))
 
 h5 = h5parm.h5parm(args.h5parms[0])
 ss = h5.getSolset(args.solsetin)
@@ -63,15 +72,24 @@ vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
 
 if convert_tec or (not convert_tec and 'phase' in args.soltab2merge):
     print('Determining frequency grid...')
-    ff = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_first + '::SPECTRAL_WINDOW')
-    freq_first = ff.getcol('CHAN_FREQ')[0][0]
-    freq_spacing = ff.getcol('CHAN_WIDTH')[0][0]
-    ff.close()
-
-    fl = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_last + '::SPECTRAL_WINDOW')
-    freq_last = fl.getcol('CHAN_FREQ')[0][0]
-    print(freq_first, freq_last, freq_spacing)
-    ax_freq = np.arange(freq_first, freq_last + freq_spacing, freq_spacing)
+    print('Determining time axis...')
+    len_freq_old = 0
+    ax_freq = None
+    for ih5 in args.h5parms:
+        fh5 = h5parm.h5parm(ih5)
+        ss = fh5.getSolset('sol000')
+        if 'tec000' in ss.getSoltabNames():
+            st = ss.getSoltab('tec000')
+        elif 'phase000' in ss.getSoltabNames():
+            st = ss.getSoltab('phase000')
+        ax_freq_temp = st.getAxisValues('freq')
+        if len(ax_freq_temp) > len_freq_old:
+            # Longer freq axis meas a shorter solution interval was used.
+            ax_freq = ax_freq_temp
+            len_freq_old = len(ax_freq)
+            name_freq = ih5
+        fh5.close()
+    print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1]-ax_freq[0]))
     if 'pol' in axes_new:
         phases = np.zeros((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
     else:
@@ -88,7 +106,7 @@ else:
     solsetout = h5out.makeSolset('sol000')
 antennasout = solsetout.getAnt()
 antennatable = solsetout.obj._f_get_child('antenna')
-antennatable.append(ss.obj.antenna.read())
+antennatable.append(ss_antennas)
 sourcelist = []
 
 for i, h5 in enumerate(args.h5parms):
