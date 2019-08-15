@@ -111,7 +111,7 @@ elif not convert_tec:
 
 h5out = h5parm.h5parm(args.h5out, readonly=False)
 if args.append_to_solset:
-    solsetout = h5out.makeSolset(append_to_solset)
+    solsetout = h5out.getSolset(append_to_solset)
 else:
     # Try to make a new one.
     solsetout = h5out.makeSolset('sol000')
