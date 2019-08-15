@@ -75,7 +75,7 @@ def is_tapered():
     tapered = len(tapered_images) > 0
     return tapered
 
-def make_dde_directions(sourcecat, Speak_min = 0.025, parset='')
+def make_dde_directions(sourcecat, Speak_min = 0.025, parset=''):
     skymodel_csv = ascii.read(sourcecat, format='csv', header_start=4, data_start=5)
 
     Speak = skymodel_csv['Peak_flux']
@@ -124,7 +124,7 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset='')
     print('msout.name=[' + ','.join(msnamelist) + ']')
     msposlist = list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), positions_25mJy['RA', 'DEC']))
     print('phasecenter=[' + ','.join(msposlist) + ']')
-    region_strs = map(lambda pos: 'fk5\ncircle({:f},{:f},{:f}) # color=red width=2 text="{:s}"'.format(*pos['RA','DEC'], 30. / 3600, str(pos['Source_id'])), positions_25mJy)
+    region_strs = map(lambda pos: 'fk5\ncircle({:f},{:f},{:f}) # color=red width=2 text="{:s}"'.format(pos['RA'],pos['DEC'], 30. / 3600, str(pos['Source_id'])), positions_25mJy)
     for i in range(len(msnamelist)//10):
         with open('split_25mJy_{:02d}.parset'.format(i), 'w') as f:
             output = PARSET + '\nmsout.name=[' + ','.join(msnamelist[10*i:10*(i+1)]) + ']\n' +\
@@ -369,7 +369,7 @@ else:
     LOGGER.info('Creating extended emission mask from 6'' image.')
     make_extended_mask(infile=CONFIG['subtract']['lotss_directory'] + '/image_full_ampphase_di_m.NS.app.restored.fits', fullresfile='image_dirin_SSD_init_natural.app.restored.fits', sizethresh=250, rootname='extended')
     LOGGER.info('Extended emission mask saved as extended-mask-high.fits')
-    LOGGER.info('Merging with image-based mask.'
+    LOGGER.info('Merging with image-based mask.')
     merge_mask(in1='extended-mask-high.fits', in2='image_dirin_SSD_init_natural.app.restored.fits.mask.fits', outfile='mask-merged-1.fits')
 
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.int.restored.fits'):
@@ -480,6 +480,6 @@ make_tiles(*PHASECENTER)
 DPPP_PARSETS = sorted(glob.glob('shift_to_facet_*.parset'))
 for i, p in enumerate(DPPP_PARSETS):
     for ms in MSES:
-        subprocess.call('DPPP {:s} msin={:s} msout={:s}'.format(p, ms, ms[:-3] + '.facet_{:02d}'.format(i), shell=True)
+        subprocess.call('DPPP {:s} msin={:s} msout={:s}'.format(p, ms, ms[:-3] + '.facet_{:02d}'.format(i), shell=True))
     # Image here.
     # WSClean with IDG on GPU, or DDFacet?
