@@ -163,7 +163,8 @@ def make_tiles(ra, dec, tile_spacing=0.625, tile_facet_size=0.7):
             with open('shift_to_facet_{:d}.parset'.format(k), 'w') as f:
                 f.write(PARSET)
             k += 1
-    region_strs = map(lambda pos: 'fk5\nbox({:f},{:f},{:f},{:f},0) # color=green width=4 text=""'.format(*pos, facet_size.value, facet_size.value), facetlist)
+    #region_strs = map(lambda pos: 'fk5\nbox({:f},{:f},{:f},{:f},0) # color=green width=4 text=""'.format(*pos, facet_size.value, facet_size.value), facetlist)
+    region_strs = map(lambda pos: 'fk5\nbox({:f},{:f},{:f},{:f},0) # color=green width=4 text=""'.format(pos[0], pos[1], facet_size.value, facet_size.value), facetlist)
     parser = DS9Parser('\n'.join(list(region_strs)))
     regions = parser.shapes.to_regions()
     write_ds9(regions, 'facets.reg')
