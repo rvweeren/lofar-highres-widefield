@@ -269,12 +269,13 @@ if CONFIG['data'].getboolean('do_subtract'):
     path = CONFIG['subtract']['lotss_directory']
     LOGGER.info('Copying over necessary LoTSS products.')
     import shutil
-    reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_5038110493.005561_smoothed.npz', 'DDS3_full_slow_5038110493.005561_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
+    reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_*_smoothed.npz', 'DDS3_full_slow_*_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
     for r in reqs:
-        if os.path.isfile(path + '/' + r):
-            shutil.copy2(path + '/' + r, os.getcwd() + '/')
-        elif os.path.isdir(path + '/' + r):
-            shutil.copytree(path + '/' + r, os.getcwd() + '/' + r)
+        f = glob.glob(path + '/' + r)
+        if os.path.isfile(f):
+            shutil.copy2(f, os.getcwd() + '/')
+        elif os.path.isdir(f):
+            shutil.copytree(f, os.getcwd() + '/' + r)
     LOGGER.info('Flagging international stations in all MS.')
     for ms in MSES:
         CMD1 = 'backup_flagtable.py {:s}'.format(ms)
