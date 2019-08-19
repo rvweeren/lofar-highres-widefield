@@ -271,7 +271,7 @@ if CONFIG['data'].getboolean('do_subtract'):
     import shutil
     reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_*_smoothed.npz', 'DDS3_full_slow_*_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
     for r in reqs:
-        f = glob.glob(path + '/' + r)
+        f = glob.glob(path + '/' + r)[0]
         if os.path.isfile(f):
             shutil.copy2(f, os.getcwd() + '/')
         elif os.path.isdir(f):
