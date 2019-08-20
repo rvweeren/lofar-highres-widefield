@@ -276,7 +276,17 @@ if CONFIG['data'].getboolean('do_subtract'):
             shutil.copy2(f, os.getcwd() + '/')
         elif os.path.isdir(f):
             shutil.copytree(f, os.path.join(os.getcwd(), r))
+
     LOGGER.info('Flagging international stations in all MS.')
+    FLAG_IS_PARSET = '''
+    msout = .
+
+    steps = [flag]
+    flag.type = preflagger
+    flag.baseline = ^[CR]S*&*
+    '''
+    with open('flag_IS.parset', 'w') as f:
+        f.write(FLAG_IS_PARSET)
     for ms in MSES:
         CMD1 = 'backup_flagtable.py {:s}'.format(ms)
         CMD2 = 'DPPP flag_IS.parset msin={:s}'.format(ms)
