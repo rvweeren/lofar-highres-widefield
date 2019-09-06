@@ -64,6 +64,15 @@ def get_mslist():
             mses.append(l.strip())
     return mses
 
+def get_mslist_highres():
+    ''' Put all measurement sets from the mslist text file into a list.
+    '''
+    mses = []
+    with open(CONFIG['data']['highres_data']) as f:
+        for l in f.readlines():
+            mses.append(l.strip())
+    return mses
+
 
 def is_tapered():
     ''' Checks if the data has already been tapered.
@@ -137,23 +146,23 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset=''):
 
     write_ds9(regions, 'pointings_25mJy.reg')
 
-def make_tiles(ra, dec, tile_spacing=0.625, tile_facet_size=0.7):
+def make_tiles(ra, dec, tile_spacing=0.5, tile_facet_size=0.55):
     ''' Create the tiling for a 0.3'' mosaic of the central 2.5 degree.
     
     Args:
         ra (float): right ascension of the pointing center.
         dec (float): declination of the pointing center.
     Returns:
-        facets (ndarray): a 4 x 4 x 2 array with the central RA and DEC of the tiles.
+        facets (ndarray): a 5 x 5 x 2 array with the central RA and DEC of the tiles.
     '''
     spacing = tile_spacing * u.degree
     # Have some overlap
     facet_size = tile_facet_size * u.degree
-    facets = np.zeros((4,4,2)) * u.degree#, dtype=(float, 2)) * u.degree
+    facets = np.zeros((5,5,2)) * u.degree#, dtype=(float, 2)) * u.degree
     facetlist = []
     k = 1
-    for i in range(4):
-        for j in range(4):
+    for i in range(5):
+        for j in range(5):
             RA = phasecenter.ra + (spacing * (j-1.5) / np.cos((phasecenter.dec + spacing*(i-1.5)).rad))
             DEC = phasecenter.dec + (spacing * (i-1.5))
             facets[i, j, 0] = RA
@@ -277,33 +286,9 @@ if CONFIG['data'].getboolean('do_subtract'):
         elif os.path.isdir(f):
             shutil.copytree(f, os.path.join(os.getcwd(), r))
 
-    LOGGER.info('Flagging international stations in all MS.')
-    FLAG_IS_PARSET = '''
-    msout = .
-
-    steps = [flag]
-    flag.type = preflagger
-    flag.baseline = ^[CR]S*&*
-    '''
-    with open('flag_IS.parset', 'w') as f:
-        f.write(FLAG_IS_PARSET)
-    for ms in MSES:
-        CMD1 = 'backup_flagtable.py {:s}'.format(ms)
-        CMD2 = 'DPPP flag_IS.parset msin={:s}'.format(ms)
-        LOGGER.info(CMD1)
-        subprocess.call(CMD1, shell=True)
-        LOGGER.info(CMD2)
-        subprocess.call(CMD2, shell=True)
-
     CMD = 'sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p keepcenter'.format(box, CONFIG['data']['mslist'], dc)
     LOGGER.info(CMD)
     subprocess.call(CMD, shell=True)
-
-    LOGGER.info('Restoring flags.')
-    for ms in MSES:
-        CMD3 = 'restore_flagtable.py {:s}'.format(ms)
-        LOGGER.info(CMD3)
-        subprocess.call(CMD3, shell=True)
 
 if CONFIG['control']['exitafter'] == 'subtract':
     LOGGER.info('Pipeline finished successfully.')
@@ -489,10 +474,36 @@ PHASECENTER = tab.getcol('REFERENCE_DIR').squeeze()
 make_tiles(*PHASECENTER)
 
 # Make phaseshifted copies of each tile and image.
+# This repeats what was done for the 1'' image, but now on the 16ch, 2s data.
+# The steps are:
+# 1) Subtract the 6'' LoTSS model
+# 2) Subtract the 1'' model of the facet.
+# 3) Phaseshift to the facet and average to 4 s and 4 ch/SB
 DPPP_PARSETS = sorted(glob.glob('shift_to_facet_*.parset'))
-for i, p in enumerate(DPPP_PARSETS):
+box = CONFIG['subtract']['boxfile']
+MSES = get_mslist_highres()
+# Subtract the 6'' LoTSS map from each block.
+for ms in MSES:
+    #subprocess.call('DPPP {:s} msin={:s} msout={:s}'.format(p, ms, ms[:-3] + '.facet_{:02d}'.format(i), shell=True))
+    LOGGER.info('Subtracting 6 arcsecond LoTSS map from {:s}.'.format(ms))
+    CMD1 = 'backup_flagtable.py {:s}'.format(ms)
+    CMD2 = 'DPPP flag_IS.parset msin={:s}'.format(ms)
+    LOGGER.info(CMD1)
+    subprocess.call(CMD1, shell=True)
+    LOGGER.info(CMD2)
+    subprocess.call(CMD2, shell=True)
+
+    CMD = 'sub-sources-outside-region.py -b {:s} -m {:s} -c {:s} -f 1 -t 1 -p sub6asec --nophaseshift'.format(box, ms, dc)
+    LOGGER.info(CMD)
+    subprocess.call(CMD, shell=True)
+
+    LOGGER.info('Restoring flags.')
     for ms in MSES:
-        #subprocess.call('DPPP {:s} msin={:s} msout={:s}'.format(p, ms, ms[:-3] + '.facet_{:02d}'.format(i), shell=True))
-        pass
-    # Image here.
-    # WSClean with IDG on GPU, or DDFacet?
+        CMD3 = 'restore_flagtable.py {:s}'.format(ms)
+        LOGGER.info(CMD3)
+        subprocess.call(CMD3, shell=True)
+    LOGGER.info('Finished subtracting 6 arsecond LoTSS map from {:s}.'.foramt(ms))
+    
+# Now subtract the 1 arcsecond model
+for ms in glob.glob('sub6asec*.ms'):
+    LOGGER.info('')
