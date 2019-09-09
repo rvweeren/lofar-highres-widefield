@@ -10,8 +10,10 @@ import sys
 import traceback
 
 from astropy import units as u
+from astropy.coordinates import SkyCoord
 from astropy.io import ascii
 from astropy.io import fits
+from astropy.table import Table
 from regions import DS9Parser, write_ds9
 
 import bdsf
@@ -64,6 +66,7 @@ def get_mslist():
             mses.append(l.strip())
     return mses
 
+
 def get_mslist_highres():
     ''' Put all measurement sets from the mslist text file into a list.
     '''
@@ -84,7 +87,8 @@ def is_tapered():
     tapered = len(tapered_images) > 0
     return tapered
 
-def make_dde_directions(sourcecat, Speak_min = 0.025, parset=''):
+
+def make_dde_directions(sourcecat, Speak_min=0.025, parset=''):
     skymodel_csv = ascii.read(sourcecat, format='csv', header_start=4, data_start=5)
 
     Speak = skymodel_csv['Peak_flux']
@@ -96,17 +100,14 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset=''):
     # In case of multiple components of a single source being found, calculate the mean position.
     positions = Table(names=['Source_id', 'RA', 'DEC'])
 
-    from scipy.spatial.distance import pdist, squareform
-    from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+    from scipy.cluster.hierarchy import linkage, fcluster
     # Make an (N,2) array of directions and compute the distances between points.
     pos = np.stack((list(sub_tab['RA']), list(sub_tab['DEC'])), axis=1)
-    distances = pdist(pos, 'euclidean')
 
     # Cluster components based on the distance between them.
     # Everything within 1 arcmin gets clustered into a direction.
     Z = linkage(pos, method='complete', metric='euclidean')
     clusters = fcluster(Z, 60. / 3600., criterion='distance')
-    dendrogram(Z)
 
     # Loop over the clusters and merge them into single directions.
     for c in np.unique(clusters):
@@ -133,11 +134,11 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset=''):
     print('msout.name=[' + ','.join(msnamelist) + ']')
     msposlist = list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), positions_25mJy['RA', 'DEC']))
     print('phasecenter=[' + ','.join(msposlist) + ']')
-    region_strs = map(lambda pos: 'fk5\ncircle({:f},{:f},{:f}) # color=red width=2 text="{:s}"'.format(pos['RA'],pos['DEC'], 30. / 3600, str(pos['Source_id'])), positions_25mJy)
-    for i in range(len(msnamelist)//10):
+    region_strs = map(lambda pos: 'fk5\ncircle({:f},{:f},{:f}) # color=red width=2 text="{:s}"'.format(pos['RA'], pos['DEC'], 30. / 3600, str(pos['Source_id'])), positions_25mJy)
+    for i in range(len(msnamelist) // 10):
         with open('split_25mJy_{:02d}.parset'.format(i), 'w') as f:
-            output = PARSET + '\nmsout.name=[' + ','.join(msnamelist[10*i:10*(i+1)]) + ']\n' +\
-                     'shift.phasecenter=[' + ','.join(msposlist[10*i:10*(i+1)]) + ']\n'
+            output = PARSET + '\nmsout.name=[' + ','.join(msnamelist[10 * i:10 * (i + 1)]) + ']\n' +\
+                'shift.phasecenter=[' + ','.join(msposlist[10 * i:10 * (i + 1)]) + ']\n'
             f.write(output)
 
     from regions import DS9Parser, write_ds9
@@ -146,9 +147,10 @@ def make_dde_directions(sourcecat, Speak_min = 0.025, parset=''):
 
     write_ds9(regions, 'pointings_25mJy.reg')
 
+
 def make_tiles(ra, dec, tile_spacing=0.5, tile_facet_size=0.55):
     ''' Create the tiling for a 0.3'' mosaic of the central 2.5 degree.
-    
+
     Args:
         ra (float): right ascension of the pointing center.
         dec (float): declination of the pointing center.
@@ -158,26 +160,27 @@ def make_tiles(ra, dec, tile_spacing=0.5, tile_facet_size=0.55):
     spacing = tile_spacing * u.degree
     # Have some overlap
     facet_size = tile_facet_size * u.degree
-    facets = np.zeros((5,5,2)) * u.degree#, dtype=(float, 2)) * u.degree
+    facets = np.zeros((5, 5, 2)) * u.degree
     facetlist = []
     k = 1
+    phasecenter = SkyCoord(ra * u.degree, dec * u.degree, frame='icrs')
     for i in range(5):
         for j in range(5):
-            RA = phasecenter.ra + (spacing * (j-1.5) / np.cos((phasecenter.dec + spacing*(i-1.5)).rad))
-            DEC = phasecenter.dec + (spacing * (i-1.5))
+            RA = phasecenter.ra + (spacing * (j - 1.5) / np.cos((phasecenter.dec + spacing * (i - 1.5)).rad))
+            DEC = phasecenter.dec + (spacing * (i - 1.5))
             facets[i, j, 0] = RA
             facets[i, j, 1] = DEC
-            facetlist.append((RA.deg,DEC.deg))
+            facetlist.append((RA.deg, DEC.deg))
             PARSET = 'msout.storagemanager=dysco\nmsout.storagemanager.databitrate=4\nmsout.storagemanager.weightbitrate=8\nsteps=[shift,avg]\nshift.type = phaseshift\nshift.phasecenter = [{:f}deg, {:f}deg]\navg.type = average\navg.timeresolution = 4\navg.freqresolution = 48.82kHz'.format(RA.deg, DEC.deg)
             with open('shift_to_facet_{:d}.parset'.format(k), 'w') as f:
                 f.write(PARSET)
             k += 1
-    #region_strs = map(lambda pos: 'fk5\nbox({:f},{:f},{:f},{:f},0) # color=green width=4 text=""'.format(*pos, facet_size.value, facet_size.value), facetlist)
     region_strs = map(lambda pos: 'fk5\nbox({:f},{:f},{:f},{:f},0) # color=green width=4 text=""'.format(pos[0], pos[1], facet_size.value, facet_size.value), facetlist)
     parser = DS9Parser('\n'.join(list(region_strs)))
     regions = parser.shapes.to_regions()
     write_ds9(regions, 'facets.reg')
     return facets
+
 
 def run_pybdsf(fitsname, detectimage, outcat='skymodel_1asec_lbregion_pybdsf'):
     ''' Run PyBDSF on an image, using standard SKSP settings.
@@ -280,7 +283,7 @@ if CONFIG['data'].getboolean('do_subtract'):
     import shutil
     reqs = ['image_dirin_SSD_m.npy.ClusterCat.npy', 'DDS3_full_*_smoothed.npz', 'DDS3_full_slow_*_merged.npz', 'image_full_ampphase_di_m.NS.DicoModel', 'image_full_ampphase_di_m.NS.mask01.fits', 'SOLSDIR']
     for r in reqs:
-        f = glob.glob(os.path.join(path,r))[0]
+        f = glob.glob(os.path.join(path, r))[0]
         if os.path.isfile(f):
             shutil.copy2(f, os.getcwd() + '/')
         elif os.path.isdir(f):
@@ -340,8 +343,8 @@ else:
         CMD = 'transfer_imaging_weight.py {:s}'.format(ms)
         LOGGER.info(CMD)
         subprocess.call(CMD, shell=True)
-    #BEAM = get_beam('wsclean_taper-MFS-psf.fits')
-    #DDF_RESTORING_BEAM = '[{maj:f},{min:f},{pa:f}'.format(BEAM[0], BEAM[1], BEAM[2])
+    # BEAM = get_beam('wsclean_taper-MFS-psf.fits')
+    # DDF_RESTORING_BEAM = '[{maj:f},{min:f},{pa:f}'.format(BEAM[0], BEAM[1], BEAM[2])
     DDF_RESTORING_BEAM = '1.0'
 
 if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.int.restored.fits'):
@@ -476,15 +479,15 @@ make_tiles(*PHASECENTER)
 # Make phaseshifted copies of each tile and image.
 # This repeats what was done for the 1'' image, but now on the 16ch, 2s data.
 # The steps are:
-# 1) Subtract the 6'' LoTSS model
-# 2) Subtract the 1'' model of the facet.
-# 3) Phaseshift to the facet and average to 4 s and 4 ch/SB
+# 1) Subtract the 6'' LoTSS model.
+# 2) Apply infield calibrator corrections.
+# 3) Subtract the 1'' model of the facet.
+# 4) Phaseshift to the facet and average to 4 s and 4 ch/SB
 DPPP_PARSETS = sorted(glob.glob('shift_to_facet_*.parset'))
 box = CONFIG['subtract']['boxfile']
 MSES = get_mslist_highres()
 # Subtract the 6'' LoTSS map from each block.
 for ms in MSES:
-    #subprocess.call('DPPP {:s} msin={:s} msout={:s}'.format(p, ms, ms[:-3] + '.facet_{:02d}'.format(i), shell=True))
     LOGGER.info('Subtracting 6 arcsecond LoTSS map from {:s}.'.format(ms))
     CMD1 = 'backup_flagtable.py {:s}'.format(ms)
     CMD2 = 'DPPP flag_IS.parset msin={:s}'.format(ms)
@@ -502,8 +505,41 @@ for ms in MSES:
         CMD3 = 'restore_flagtable.py {:s}'.format(ms)
         LOGGER.info(CMD3)
         subprocess.call(CMD3, shell=True)
-    LOGGER.info('Finished subtracting 6 arsecond LoTSS map from {:s}.'.foramt(ms))
-    
-# Now subtract the 1 arcsecond model
+    LOGGER.info('Finished subtracting 6 arsecond LoTSS map from {:s}.'.format(ms))
+
+# Now first apply the infield calibrator solutions to each of the 6'' subtracted measurement sets.
+LOGGER.info('Correcting 6'' subtracted data with infield calibrator solutions.')
+PARSET_IFCAL = '''msin.datacolumn=DATA
+msout=.
+msout.datacolumn=CORRECTED_DATA
+msout.storagemanager=dysco
+msout.storagemanager.databitrate=4
+msout.storagemanager.weightbitrate=8
+steps=[applyif1,applyif2]
+applyif1.type=applycal
+applyif1.parmdb={ifphase:s}
+applyif1.solset={ifss:s}
+applyif1.correction=phase000
+
+applyif2.type=applycal
+applyif2.parmdb={ifamp:s}
+applyif2.solset={ifss:s}
+applyif2.steps=[p,a]
+applyif2.p.correction=phase000
+applyif2.a.correction=amplitude000
+'''.format(ifphase=CONFIG['solutions']['infield_sols_p'], ifamp=CONFIG['solutions']['infield_sols_ap'], ifss=CONFIG['solutions']['infield_solset'])
+with open('apply_if_sub6.parset', 'w') as f:
+    f.write(PARSET_IFCAL)
+
 for ms in glob.glob('sub6asec*.ms'):
-    LOGGER.info('')
+    LOGGER.info('Correcting {msin:s}.'.format(msin=ms))
+    msout = 'ifcorr_' + ms
+    CMD = 'DPPP applly_if_sub6.parset msin={msin:s} msout={msout:s} msout.datacolumn=DATA'.format(msin=ms, msout=msout)
+    LOGGER.info(CMD)
+    subprocess.call(CMD, shell=True)
+if CONFIG['control']['conserve_space']:
+    # Cleanup uncorrected 6'' subtracted datasets here to save space.
+    # Corrected ones are prefixed with ifcorr_sub6asec, uncorrected ones are just called sub6asec.
+    datasets = glob.glob('sub6asec*.ms')
+    for ds in datasets:
+        shutil.rmtree(ds)
