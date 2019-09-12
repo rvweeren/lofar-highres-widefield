@@ -531,6 +531,7 @@ applyif2.a.correction=amplitude000
 with open('apply_if_sub6.parset', 'w') as f:
     f.write(PARSET_IFCAL)
 
+# This takes about 50 minutes per dataset on a HDD.
 for ms in glob.glob('sub6asec*.ms'):
     LOGGER.info('Correcting {msin:s}.'.format(msin=ms))
     msout = 'ifcorr_' + ms

@@ -42,6 +42,8 @@ for ih5 in args.h5parms:
         st = ss.getSoltab('tec000')
     elif 'phase000' in ss.getSoltabNames():
         st = ss.getSoltab('phase000')
+    elif 'amplitude000' in ss.getSoltabNames():
+        st = ss.getSoltab('amplitude000')
     ax_time_temp = st.getAxisValues('time')
     if len(ax_time_temp) > len_time_old:
         # Longer time axis meas a shorter solution interval was used.
@@ -70,7 +72,27 @@ if 'pol' in AN:
 
 vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
 
-if 'phase' in args.soltab2merge:
+if 'amplitude' in args.soltab2merge:
+    print('Determining frequency grid...')
+    len_freq_old = 0
+    ax_freq = None
+    for ih5 in args.h5parms:
+        fh5 = h5parm.h5parm(ih5)
+        ss = fh5.getSolset('sol000')
+        st = ss.getSoltab('amplitude000')
+        ax_freq_temp = st.getAxisValues('freq')
+        if len(ax_freq_temp) > len_freq_old:
+            # Longer freq axis meas a shorter solution interval was used.
+            ax_freq = ax_freq_temp
+            len_freq_old = len(ax_freq)
+            name_freq = ih5
+        fh5.close()
+    print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1]-ax_freq[0]))
+    if 'pol' in axes_new:
+        gains = np.ones((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
+    else:
+        gains = np.ones((1, len(antennas), len(ax_freq), len(ax_time)))
+elif 'phase' in args.soltab2merge:
     print('Determining frequency grid...')
     len_freq_old = 0
     ax_freq = None
@@ -111,7 +133,7 @@ elif not convert_tec:
 
 h5out = h5parm.h5parm(args.h5out, readonly=False)
 if args.append_to_solset:
-    solsetout = h5out.getSolset(append_to_solset)
+    solsetout = h5out.getSolset(args.append_to_solset)
 else:
     # Try to make a new one.
     solsetout = h5out.makeSolset('sol000')
@@ -181,8 +203,8 @@ for i, h5 in enumerate(args.h5parms):
         phase_tmp = st.getValues()[0]
         phase = reorderAxes(phase_tmp, st.getAxesNames(), axes_new)
         tp = interp_along_axis(phase, st.getAxisValues('time'), ax_time, -1)
-        tp = interp_along_axis(phase, st.getAxisValues('freq'), ax_freq, -2)
-        tp = tp.reshape(tp.shape[0], -1, *tp.shape[1:])
+        tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
+        #tp = tp.reshape(tp.shape[0], -1, *tp.shape[1:])
         # Now add the phases to the total phase correction for this direction.
         if idx == 0:
             if 'dir' in axes_new:
@@ -194,18 +216,43 @@ for i, h5 in enumerate(args.h5parms):
                 phases = np.append(phases, tp, axis=1)
             else:
                 phases = np.append(phases, tp, axis=0)
+    elif st.getType() == 'amplitude':
+        amp_tmp = st.getValues()[0]
+        print(axes_new)
+        amp = reorderAxes(amp_tmp, st.getAxesNames(), axes_new)
+        tp = interp_along_axis(amp, st.getAxisValues('time'), ax_time, -1)
+        tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
+        if idx == 0:
+            if 'dir' in axes_new:
+                gains[:, idx, :, :, :] += tp[:, 0, ...]
+            else:
+                gains *= tp
+        else:
+            if 'pol' in axes_new:
+                gains = np.append(gains, tp, axis=1)
+            else:
+                gains = np.append(gains, tp, axis=0)
+        
             
     h5.close()
 
 # Create the output h5parm.
-weights = np.ones(phases.shape)
+try:
+    weights = np.ones(phases.shape)
+except NameError:
+    weights = np.ones(gains.shape)
 sources = np.array(sourcelist, dtype=[('name', 'S128'), ('dir', '<f4', (2,))])
 solsetout.obj.source.append(sources)
 if 'phase' in args.soltab2merge and len(polarizations) > 0:
     solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[polarizations, directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
+if 'amplitude' in args.soltab2merge and len(polarizations) > 0:
+    solsetout.makeSoltab('amplitude', axesNames=axes_new, axesVals=[polarizations, directions, antennas, ax_freq, ax_time], vals=gains, weights=weights)
 elif 'phase' in args.soltab2merge and len(polarizations) == 0:
     weights = np.ones(phases[0,...].shape)
     solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0,...], weights=weights)
+elif 'amplitude' in args.soltab2merge and len(polarizations) == 0:
+    weights = np.ones(phases[0,...].shape)
+    solsetout.makeSoltab('amplitude', axesNames=axes_new, axesVals=[directions, antennas, ax_freq, ax_time], vals=gains[0,...], weights=weights)
 if 'tec' in args.soltab2merge:
     if not convert_tec:
         weights = np.ones(phases[:, :, 0, :].shape)
