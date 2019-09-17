@@ -1,6 +1,7 @@
 from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
+from losoto.lib_operations import reorderAxes
 from scipy import ndimage
 
 import casacore.tables as ct
@@ -21,10 +22,10 @@ def plot_screen(img, prefix='', title='', suffix='', wcs=None):
     ax.set_title(title)
     ax.set_xlabel('RA')
     ax.set_ylabel('DEC')
-    i = ax.imshow(img, origin='lower', vmin=-0.1, vmax=0.1)
+    i = ax.imshow(img, origin='lower', vmin=0.5, vmax=1.5)
     cbar = fig.colorbar(i, fraction=0.046, pad=0.04)
-    cbar.set_label('dTEC')
-    fig.savefig(prefix + 'tecscreen_' + suffix + '.svg')
+    cbar.set_label('Gain')
+    fig.savefig(prefix + 'gainscreen_' + suffix + '.svg')
     plt.close(fig)
     del fig
 
@@ -39,31 +40,30 @@ t = ct.taql('SELECT REFERENCE_DIR FROM {ms:s}::FIELD'.format(ms=ms))
 phasecenter = t.getcol('REFERENCE_DIR').squeeze()
 print(phasecenter)
 t.close()
-# Time is stored as MJD, convert from seconds to days here as that's what FITS wants.
-#t = ct.taql('SELECT DISTINCT TIME FROM {ms:s}'.format(ms=ms))
-#time = t.getcol('TIME')
-#stime = time[0] 
-#dtime = (time[1] - time[0]) / (24. * 60 * 60)
-#dtime = 60.
-#t.close()
+
 h5 = h5parm.h5parm(h5p)
 ss = h5.getSolset('sol000')
-st = ss.getSoltab('tec000')
+st = ss.getSoltab('amplitude000')
 time = st.getAxisValues('time')
 stime = time[0] 
 dtime = time[1] - time[0]
+freq = st.getAxisValues('freq')
+sfreq = freq[0]
+dfreq = freq[1] - freq[0]
 
 Nantenna = len(names)
 Ntimes = len(time) # 60s timeslots for an 8 hour pointing
+Nfreqs = len(freq)
 # Set the frequency axis (that TEC doens't use) to 150 MHz as central frequency with 50 MHz of bandwidth.
 header='''SIMPLE  =                    T / file does conform to FITS standard
 BITPIX  =                  -32 / number of bits per data pixel
-NAXIS   =                    5 / number of data axes
+NAXIS   =                    6 / number of data axes
 NAXIS1  =                 256 / length of RA axis
 NAXIS2  =                 256 / length of DEC axis
-NAXIS3  =                   {nant:d} / length of ANTENNA axis
-NAXIS4  =                    1 / length of FREQ axis
-NAXIS5  =                   {ntimes:d} / length of TIME axis
+NAXIS3  =                   4
+NAXIS4  =                   {nant:d} / length of ANTENNA axis
+NAXIS5  =                    1 / length of FREQ axis
+NAXIS6  =                   {ntimes:d} / length of TIME axis
 EXTEND  =                    T / FITS dataset may contain extensions
 CTYPE1  = 'RA---SIN'           / Right ascension angle cosine
 CRPIX1  =                 128.
@@ -75,34 +75,38 @@ CRPIX2  =                 128.
 CRVAL2  =     {dec:f}
 CDELT2  =               0.0195
 CUNIT2  = 'deg     '
-CTYPE3  = 'ANTENNA '
+CTYPE3  = 'MATRIX  '
 CRPIX3  =                   1.
-CRVAL3  =                   0.
-CTYPE4  = 'FREQ    '           / Central frequency
+CDELT3  =                   1.
+CTYPE4  = 'ANTENNA '
 CRPIX4  =                   1.
-CRVAL4  =     {cfreq:f}
-CDELT4  =         {dfreq:f}
-CUNIT4  = 'Hz      '
-CTYPE5  = 'TIME    '
+CRVAL4  =                   0.
+CTYPE5  = 'FREQ    '           / Central frequency
 CRPIX5  =                   1.
-CRVAL5  =                   {stime:f} / Should be an AIPS time
-CDELT5  =                  {dtime:f}'''.format(nant=Nantenna, ntimes=Ntimes, ra=np.rad2deg(phasecenter[0]), dec=np.rad2deg(phasecenter[1]), cfreq=150e6, dfreq=100e6, stime=stime, dtime=dtime)
+CRVAL5  =     {cfreq:f}
+CDELT5  =         {dfreq:f}
+CUNIT5  = 'Hz      '
+CTYPE6  = 'TIME    '
+CRPIX6  =                   1.
+CRVAL6  =                   {stime:f} / Should be an AIPS time
+CDELT6  =                  {dtime:f}'''.format(nant=Nantenna, ntimes=Ntimes, ra=np.rad2deg(phasecenter[0]), dec=np.rad2deg(phasecenter[1]), cfreq=sfreq, dfreq=dfreq, stime=stime, dtime=dtime)
 
 # 4ch/4s data
-# Frequency has length one, since it is TEC.
-#data = np.zeros((128, 128, Nantenna, 1, Ntimes))
 # FITS is transposed compared to Numpy.
-data = np.zeros((Ntimes, 1, Nantenna, 256, 256), dtype=np.float32)
+# 4 is the "matrix" entry containing Re(XX), Im(XX), Re(YY), Im(YY)
+data = np.zeros((Ntimes, Nfreqs, Nantenna, 4, 256, 256), dtype=np.float32)
+
 
 # Read in h5parm.
 h5 = h5parm.h5parm(h5p)
 ss = h5.getSolset('sol000')
-st = ss.getSoltab('tec000')
+sta = ss.getSoltab('amplitude000')
+stp = ss.getSoltab('phase000')
 h5_stations = list(st.getAxisValues('ant'))
-# Find nearest pixel for a given direction.
 H = fits.Header.fromstring(header, sep='\n')
 wcs = WCS(H).celestial
 directions = list(st.getAxisValues('dir'))
+# Find nearest pixel for a given direction.
 for d, c in ss.getSou().items():
     diridx = directions.index(d)
     RAd, DECd = np.rad2deg(c)
@@ -116,18 +120,32 @@ for d, c in ss.getSou().items():
         if 'CS' in station:
             # Take ST001 solutions.
             # [dir, ant, time]
-            idx = h5_stations.index('ST001')
+            sidx = h5_stations.index('ST001')
         else:
-            idx = h5_stations.index(station)
-        vals_tmp = st.getValues()[0][diridx, idx, :].reshape((-1, 1))
-        data[:, :, istation, Y, X] = vals_tmp
+            sidx = h5_stations.index(station)
+        valsa_tmp = sta.getValues()[0]
+        valsa_tmp_r = reorderAxes(valsa_tmp, sta.getAxesNames(), ['time', 'freq', 'ant', 'dir', 'pol'])
+
+        valsp_tmp = stp.getValues()[0]
+        valsp_tmp_r = reorderAxes(valsp_tmp, stp.getAxesNames(), ['time', 'freq', 'ant', 'dir', 'pol'])
+
+        real = valsa_tmp_r * np.cos(valsp_tmp_r)
+        imag = valsa_tmp_r * np.sin(valsp_tmp_r)
+
+        reXX = real[..., 0]
+        imXX = imag[..., 0]
+        reYY = real[..., -1]
+        imYY = imag[..., -1]
+        matrix = np.asarray([reXX, imXX, reYY, imYY], dtype=np.float32)
+        #print('Matrix: ', matrix.shape)
+        matrix = np.transpose(matrix, (1, 2, 3, 0, 4))
+        #print('Matrix.T: ', matrix.shape)
+        #print('Data: ', data.shape)
+        data[:, :, istation, :, Y, X] = matrix[:, :, sidx, :, diridx]
 
 hdu = fits.PrimaryHDU(header=H)
 hdu.data = data
-hdu.writeto('tecscreen_raw_44dirs_bigger.fits')
-
-def interpolate_antenna(data, antenna):
-    pass
+hdu.writeto('gainscreen_raw_40dirs_bigger.fits', overwrite=True)
 
 # Interpolate the grid using a nearest neighbour approach.
 # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
@@ -140,19 +158,24 @@ output = mp.Queue()
 from matplotlib.pyplot import figure
 
 data_int = np.zeros(data.shape)
-print('Making TEC screen.')
+print('Making gain screen.')
 # Run the antennas in parallel. Much faster than interpolating an NxNxNantx1xNtime array.
 for i, a in enumerate(names):
     print('Processing antenna {:s}'.format(a))
-    adata = data[:, :, i, :, :]
+    adata = data[:, :, i, :, :, :]
     invalid_cell_mask = np.where(adata == 0, 1, 0)
     indices = ndimage.distance_transform_edt(invalid_cell_mask, return_distances=False, return_indices=True)
-    data_int[:, :, i, :, :] = adata[tuple(indices)]
-    #if 'CS' not in a:
-    #    for j in range(Ntimes):
-    #        plot_screen(data_int[j, 0, i, :, :], title=a, prefix=a, suffix='{:03d}'.format(j), wcs=wcs)
+    data_int[:, :, i, :, :, :] = adata[tuple(indices)]
+    if 'CS' not in a:
+        for j in range(Ntimes):
+            real = data_int[j, 0, i, 0, :, :]
+            imag = data_int[j, 0, i, 1, :, :]
+            amp = (real**2 + imag**2)**0.5
+            #plot_screen(amp, title=a + ' XX', prefix=a, suffix='{:03d}'.format(j), wcs=wcs)
+# We don't want 0 gains, so check for zeros.
+data_int[np.where(data_int == 0)] = 1
 hdu = fits.PrimaryHDU(header=H)
 hdu.data = data_int
-hdu.writeto('tecscreen_interpolated_44dirs_bigger.fits')
+hdu.writeto('gainscreen_interpolated_40dirs_bigger.fits', overwrite=True)
 print('Finished interpolating.')
 
