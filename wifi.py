@@ -310,7 +310,7 @@ if CONFIG['data'].getboolean('do_apply_infield'):
             sols_ap = CONFIG['solutions']['infield_sols_ap']
             try:
                 with open('apply_infield_solutions.parset', 'w') as f:
-                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1,applyif2] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000 applyif2.type=applycal applyif2 applyif2.parmdb={h52:s} applyif2.solset={ss2:s} applyif2.correction=amplitude000'.format(dc=dc, ms=ms, h51=sols_p, ss1=CONFIG['solutions']['infield_solset'], h52=sols_ap, ss2=CONFIG['solutions']['infield_solset']).replace(' ', '\n'))
+                    f.write('msin={ms:s} msin.datacolumn={dc:s} msout=. msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[applyif1,applyif2] applyif1.type=applycal applyif1.parmdb={h51:s} applyif1.solset={ss1:s} applyif1.correction=phase000 applyif2.type=applycal applyif2.steps=[p,a] applyif2.parmdb={h52:s} applyif2.solset={ss2:s} applyif2.p.correction=phase000 applyif2.a.correction=amplitude000'.format(dc=dc, ms=ms, h51=sols_p, ss1=CONFIG['solutions']['infield_solset'], h52=sols_ap, ss2=CONFIG['solutions']['infield_solset']).replace(' ', '\n'))
                 CMD = 'DPPP apply_infield_solutions.parset'
                 LOGGER.info(CMD)
                 subprocess.call(CMD, shell=True)
