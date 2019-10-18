@@ -1,7 +1,11 @@
 from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
+from matplotlib.pyplot import figure, show
 from scipy import ndimage
+from scipy.interpolate import Rbf
+from scipy.signal import medfilt
+from tqdm import tqdm
 
 import casacore.tables as ct
 import losoto.h5parm as h5parm
@@ -65,6 +69,7 @@ NAXIS3  =                   {nant:d} / length of ANTENNA axis
 NAXIS4  =                    1 / length of FREQ axis
 NAXIS5  =                   {ntimes:d} / length of TIME axis
 EXTEND  =                    T / FITS dataset may contain extensions
+EQUINOX =                2000.
 CTYPE1  = 'RA---SIN'           / Right ascension angle cosine
 CRPIX1  =                 128.
 CRVAL1  =          {ra:f}
@@ -103,9 +108,25 @@ h5_stations = list(st.getAxisValues('ant'))
 H = fits.Header.fromstring(header, sep='\n')
 wcs = WCS(H).celestial
 directions = list(st.getAxisValues('dir'))
-for d, c in ss.getSou().items():
+print(directions)
+sources = ss.getSou()
+RA = []
+DEC = []
+TEC = st.getValues()[0]
+dirs = []
+print(TEC.shape)
+#for d, c in ss.getSou().items():
+for d in directions:
+    c = sources[d]
     diridx = directions.index(d)
+    dirs.append(d)
     RAd, DECd = np.rad2deg(c)
+    RA.append(RAd)
+    DEC.append(DECd)
+    c = wcs.wcs_world2pix(RAd,DECd,0)
+    print(c[0])
+    print('Direction {:s} is at pixel coordinates {:f},{:f}'.format(d, float(c[0]), float(c[1])))
+
     print('Adding direction {:s} at {:f},{:f}'.format(d, RAd, DECd))
     pixel_coords = wcs.wcs_world2pix(RAd, DECd, 0)
     X = int(np.around(pixel_coords[0]))
@@ -119,40 +140,134 @@ for d, c in ss.getSou().items():
             idx = h5_stations.index('ST001')
         else:
             idx = h5_stations.index(station)
-        vals_tmp = st.getValues()[0][diridx, idx, :].reshape((-1, 1))
-        data[:, :, istation, Y, X] = vals_tmp
+        #vals_tmp = st.getValues()[0][diridx, idx, :].reshape((-1, 1))
+        refidx = h5_stations.index('ST001')
+        vals_tmp = st.getValues()[0][diridx, idx, :] - st.getValues()[0][diridx, refidx, :]
+        #data[:, :, istation, Y, X] = vals_tmp.reshape((-1, 1))
+        data[:, :, istation, Y, X] = vals_tmp.reshape((-1, 1))
+    #if d == 'P470':
+    #    import matplotlib.pyplot as plt
+    #    plt.figure()
+    #    plt.plot(data[:, 0, 71, Y, X], 'h--')
+    #    plt.ylim(-0.02, 0.02)
+    #    plt.show()
 
 hdu = fits.PrimaryHDU(header=H)
 hdu.data = data
-hdu.writeto('tecscreen_raw_44dirs_bigger.fits')
-
-def interpolate_antenna(data, antenna):
-    pass
-
+#hdu.writeto('final_tecscreen_raw_42dirs_smallerpix_except_P464.fits')
+RA = np.asarray(RA)
+DEC = np.asarray(DEC)
 # Interpolate the grid using a nearest neighbour approach.
 # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
-import SharedArray as sa
-#data_int = sa.create('shm://interpdata', data.shape)
-#print('Interpolating from given directions using nearest neighbour.')
 
-import multiprocessing as mp
-output = mp.Queue()
-from matplotlib.pyplot import figure
+import concurrent.futures
+from itertools import izip
 
+#def interpolate_station(antidx, interpidx, x_from, y_from, tecs, x_to, y_to):
+def interpolate_station(antname):
+    print('Processing antenna {:s}.'.format(antname))
+    refidx = h5_stations.index('ST001')
+    if 'CS' in antname:
+        # Take ST001 solutions.
+        interpidx = h5_stations.index('ST001')
+    else:
+        interpidx = h5_stations.index(antname)
+    # These will be the new coordinates to evaluate the screen over.
+    ra_max, ra_min = wcs.wcs_pix2world(0, 0, 0)[0], wcs.wcs_pix2world(255, 255, 0)[0]
+    dec_min, dec_max = wcs.wcs_pix2world(0, 0, 0)[1], wcs.wcs_pix2world(255, 255, 0)[1]
+    size = 256
+    #y = np.linspace(dec_min, dec_max, size)
+    #x = np.linspace(ra_min, ra_max, size) * np.cos(phasecenter[1])
+    x = np.arange(size)
+    y = np.arange(size)
+    xx, yy = np.meshgrid(x, y)
+    # Do radial basis function interpolation for each time step.
+    # TEC has shape (dir, ant, time) and is reshaped to time, ant, dir)
+    #refTEC = TEC - TEC[:, refidx, :].reshape((TEC.shape[0], -1, TEC.shape[-1]))
+    screen = np.zeros((TEC.shape[-1], 256, 256))
+    print(screen.shape)
+    # Iterate over all timeslots.
+    for itstep in range(TEC.shape[-1]):
+        X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
+        tecs = TEC[:, interpidx, itstep] - TEC[:, refidx, itstep]
+        rbf = Rbf(X, Y, tecs, smooth=0.0)
+        '''
+        if ('CS' not in antname) and ('RS' not in antname):
+            print('== bla ==')
+            for i, (rr,dd) in enumerate(zip(RA,DEC)):
+                print(rr)
+                print(dd)
+                orig = tstep[interpidx][i]
+                interp = rbf(rr, dd)
+                print('Difference TEC and Rbf: {:e}'.format(orig - interp))
+                print('== end bla ==')
+        '''
+        tinterp = rbf(xx, yy)
+        if not np.allclose(tinterp[Y, X], tecs, rtol=1e-5):
+            raise ValueError('Interpolated screen does not go through nodal points.')
+        screen[itstep, :, :] = tinterp
+    '''
+    didx = directions.index('P470')
+    print(didx)
+    print(tecs.shape)
+    print(X[didx], Y[didx])
+    print(screen[:, 136, 129].shape)
+    fig = figure()
+    fig.suptitle(antname)
+    ax = fig.add_subplot(111)
+    ax.plot(TEC[didx, interpidx, :] - TEC[didx, refidx, :], 'C0h--', label='H5parm', markersize=12)
+    ax.plot(screen[:, 136, 129], 'C1h--', label='Rbf Interp. Y,X')
+    ax.plot(screen[:, 129, 136], 'C2h--', label='Rbf Interp. X,Y')
+    ax.legend()
+    ax.set_xlabel('Time'); ax.set_ylabel('dTEC')
+    show()
+    del fig
+    if ('CS' not in antname) and ('RS' not in antname):
+        print('== bla ==')
+        for i, (rr,dd) in enumerate(zip(RA,DEC)):
+            print(rr)
+            print(dd)
+            orig = tstep[interpidx][i]
+            interp = rbf(rr, dd)
+            print('Difference TEC and Rbf: {:e}'.format(orig - interp))
+            print('== end bla ==')
+    fig = figure()
+    fig.suptitle(antname)
+    ax = fig.add_subplot(111)
+    im = ax.imshow(screen[..., -1], origin='lower', extent=[ra_max, ra_min, dec_min, dec_max])
+    ax.scatter(RA, DEC, marker='x', color='r')
+    ax.set_xlabel('Right ascension'); ax.set_ylabel('Declination')
+    fig.colorbar(im)
+    fig.savefig(antname + '_{:03d}.png'.format(itstep))
+    del fig
+    show()
+    '''
+    return names.index(antname), screen
+
+# Inspired by https://stackoverflow.com/questions/38309535/populate-numpy-array-through-concurrent-futures-multiprocessing
 data_int = np.zeros(data.shape)
 print('Making TEC screen.')
-# Run the antennas in parallel. Much faster than interpolating an NxNxNantx1xNtime array.
-for i, a in enumerate(names):
-    print('Processing antenna {:s}'.format(a))
-    adata = data[:, :, i, :, :]
-    invalid_cell_mask = np.where(adata == 0, 1, 0)
-    indices = ndimage.distance_transform_edt(invalid_cell_mask, return_distances=False, return_indices=True)
-    data_int[:, :, i, :, :] = adata[tuple(indices)]
-    #if 'CS' not in a:
-    #    for j in range(Ntimes):
-    #        plot_screen(data_int[j, 0, i, :, :], title=a, prefix=a, suffix='{:03d}'.format(j), wcs=wcs)
+# Loop over antennas. Much faster than interpolating an NxNxNantx1xNtime array.
+#for i, a in enumerate(names):
+    #if 'CS' in a:
+        # Take ST001 solutions.
+    #    idx = -1
+    #print('Processing antenna {:s}'.format(a))
+    #adata = data[:, :, i, :, :]
+    #invalid_cell_mask = np.where(adata == 0, 1, 0)
+    #indices = ndimage.distance_transform_edt(invalid_cell_mask, return_distances=False, return_indices=True)
+    #data_int[:, :, i, :, :] = adata[tuple(indices)]
+with concurrent.futures.ProcessPoolExecutor(64) as executor: 
+    #for antenna, screen in executor.map(interpolate_station, *izip(*(i, idx, RA, DEC, TEC, xx, yy))):
+    for antenna, screen in executor.map(interpolate_station, names):
+        screen = screen
+        data_int[:, 0, antenna, :, :] = screen
+    #interpolate_station(idx, x, y, tstep[idx], xx, yy)
+
+#sys.exit(0)
 hdu = fits.PrimaryHDU(header=H)
 hdu.data = data_int
-hdu.writeto('tecscreen_interpolated_44dirs_bigger.fits')
+#hdu.writeto('test_50mJy_oldsolint_outrej_dejumped_rbf_smooth0.01_res0.2_refST001_tecscreen_interpolated.fits')
+hdu.writeto('final_final_tecscreen_42dirs_nosmooth_noP464_pixinterp_transpose.fits')
 print('Finished interpolating.')
 
