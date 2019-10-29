@@ -224,7 +224,7 @@ for i, h5 in enumerate(args.h5parms):
         tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
         if idx == 0:
             if 'dir' in axes_new:
-                gains[:, idx, :, :, :] += tp[:, 0, ...]
+                gains[:, idx, :, :, :] *= tp[:, 0, ...]
             else:
                 gains *= tp
         else:
