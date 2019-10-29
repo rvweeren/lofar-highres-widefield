@@ -328,61 +328,16 @@ if CONFIG['data'].getboolean('do_apply_infield'):
 else:
     LOGGER.info('Infield solutions have been applied, skipping applycal step.')
 
-if is_tapered():
-    LOGGER.info('Taper has already been created, skipping WSClean step.')
-else:
-    LOGGER.info('Tapering data to target resolution of {:s}.'.format(CONFIG['image']['taper_full']))
-    chan_out = (len(MSES) // 4) + 1
-    # Having a small pixel scale is important here, such that all baselines are considered during
-    # weighting. WSClean automatically ignores all baselines that provide resolutions higher than
-    # the given pixel size.
-    CMD = 'wsclean -j {:d} -mem {:d} -data-column {:s} -niter 0 -channels-out {:d} -weight briggs {:s} -size 1024 1024 -scale 0.05asec -minuvw-m 5000 -make-psf -fit-beam -no-reorder -no-update-model-required -store-imaging-weights -taper-gaussian {:s}asec -name wsclean_taper *.{:s}'.format(int(CONFIG['image']['wsclean_ncpu']), int(CONFIG['image']['wsclean_mem']), CONFIG['image']['data_column'], chan_out, CONFIG['image']['robust_full'], CONFIG['image']['taper_full'], MSES[0].split('.')[-1])
-    LOGGER.info(CMD)
-    subprocess.call(CMD, shell=True)
-    for i, ms in enumerate(MSES):
-        CMD = 'transfer_imaging_weight.py {:s}'.format(ms)
-        LOGGER.info(CMD)
-        subprocess.call(CMD, shell=True)
-    # BEAM = get_beam('wsclean_taper-MFS-psf.fits')
-    # DDF_RESTORING_BEAM = '[{maj:f},{min:f},{pa:f}'.format(BEAM[0], BEAM[1], BEAM[2])
-    DDF_RESTORING_BEAM = '1.0'
 
-if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.int.restored.fits'):
-    LOGGER.info('Initial widefield image already exists, not recreating.')
+if os.path.exists(os.getcwd() + 'field_1asec-MFS-image-pb.fits'):
+    LOGGER.info('1'' image already exists, not recreating.')
 else:
-    LOGGER.info('Creating {:s}" widefield image.'.format(CONFIG['image']['taper_full']))
-    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=1 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full']), beam=DDF_RESTORING_BEAM)
-    LOGGER.info(CMD)
-    subprocess.call(CMD, shell=True)
+    CMD = 'wsclean -j {:d} -mem {:d} -data-column {:s} -channels-out {:d} -weight briggs {:s} -store-imaging-weights -taper-gaussian {:s}arcsec -minuv-l 80 -size 20000 20000 -reorder -weighting-rank-filter 3 -clean-border 0.05 -mgain 0.8 -fit-beam -join-channels -padding 1.25 -auto-mask 2.5 -auto-threshold 1.0 -fit-spectral-pol 3 -pol i -name field_1asec -scale 0.35arcsec -beam-size 1.0 -niter 100000 -use-idg -grid-with-beam -use-differential-lofar-beam -aterm-config aterm-config.txt -idg-mode cpu -parallel-deconvolution 4096 -multiscale -multiscale-scales 0,4,10,25,64,160 -deconvolution-channels 3 -parallel-reordering 6 -temp-dir $PWD *.ms'.format(int(CONFIG['image']['wsclean_ncpu']), int(CONFIG['image']['wsclean_mem']), CONFIG['image']['data_column'], chan_out, CONFIG['image']['robust_full'], CONFIG['image']['taper_full'], MSES[0].split('.')[-1])
 
-if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural.app.restored.fits.mask.fits'):
-    LOGGER.info('First mask already exists, not recreating.')
-else:
-    LOGGER.info('Creating mask from initial image.')
-    CMD = 'MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2'
-    LOGGER.info(CMD)
-    subprocess.call('MakeMask.py --RestoredIm=image_dirin_SSD_init_natural.app.restored.fits --Th=7.5 --Box=50,2', shell=True)
-
-if os.path.exists(os.getcwd() + '/extended-mask-high.fits'):
-    LOGGER.info('Extended emission mask already exists, not recreating.')
-else:
-    LOGGER.info('Creating extended emission mask from 6'' image.')
-    make_extended_mask(infile=CONFIG['subtract']['lotss_directory'] + '/image_full_ampphase_di_m.NS.app.restored.fits', fullresfile='image_dirin_SSD_init_natural.app.restored.fits', sizethresh=250, rootname='extended')
-    LOGGER.info('Extended emission mask saved as extended-mask-high.fits')
-    LOGGER.info('Merging with image-based mask.')
-    merge_mask(in1='extended-mask-high.fits', in2='image_dirin_SSD_init_natural.app.restored.fits.mask.fits', outfile='mask-merged-1.fits')
-
-if os.path.exists(os.getcwd() + '/image_dirin_SSD_init_natural_m.int.restored.fits'):
-    LOGGER.info('Mask-cleaned image already exists, not recreating.')
-else:
-    LOGGER.info('Cleaning deeper with mask.')
-    CMD = 'DDF.py --Output-Name=image_dirin_SSD_init_natural_m --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=3 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10 --Mask-External=mask-merged-1.fits --Predict-InitDicoModel=image_dirin_SSD_init_natural.DicoModel --Cache-Dirty=forceresidual'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full']), beam=DDF_RESTORING_BEAM)
-    LOGGER.info(CMD)
-    subprocess.call(CMD, shell=True)
 
 LOGGER.info('Making PyBDSF catalogue of 1'' map.')
 
-run_pybdsf(fitsname='image_dirin_SSD_init_natural_m.int.restored.fits', detectimage='image_dirin_SSD_init_natural_m.app.restored.fits')
+run_pybdsf(fitsname='field_1asec-MFS-image-pb.fits', detectimage='field_1asec-MFS-image.fits')
 
 IN_CATALOGUE = 'skymodel_1asec_lbregion_pybdsf.csv'
 # https://stackoverflow.com/questions/16414410/delete-empty-lines-using-sed
@@ -390,6 +345,9 @@ subprocess.call("sed '/^[[:space:]]*$/d' {:s} > {:s}".format(IN_CATALOGUE, 'skym
 
 CATALOGUE = 'skymodel_1asec_lbregion_pybdsf.sedded.csv'
 LOGGER.info('Wrote PyBDSF catalogue to {:s}'.format(CATALOGUE))
+
+LOGGER.info('Pipeline finished.')
+sys.exit(0)
 
 LOGGER.info('Selecting directions for DDE calibrators.')
 
