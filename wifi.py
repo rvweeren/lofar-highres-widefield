@@ -346,9 +346,6 @@ subprocess.call("sed '/^[[:space:]]*$/d' {:s} > {:s}".format(IN_CATALOGUE, 'skym
 CATALOGUE = 'skymodel_1asec_lbregion_pybdsf.sedded.csv'
 LOGGER.info('Wrote PyBDSF catalogue to {:s}'.format(CATALOGUE))
 
-LOGGER.info('Pipeline finished.')
-sys.exit(0)
-
 LOGGER.info('Selecting directions for DDE calibrators.')
 
 if CONFIG['data'].getboolean('do_apply_kms'):
@@ -404,6 +401,9 @@ msout.overwrite = True
 '''
 
 make_dde_directions(CATALOGUE, parset=PARSET)
+
+LOGGER.info('Pipeline finished.')
+sys.exit(0)
 
 # Now split out all directions.
 # You should really do this on an SSD, otherwise it could take literal weeks.
