@@ -5,6 +5,7 @@
 # software paths
 ! long_baseline_pipeline_dir            = /project/sksp/Software/long_baseline_pipeline
 ! widefield_dir = /project/sksp/Software/lofar-highres-widefield
+! ddf_pipeline_dir = /project/sksp/Software/ddf-pipeline
 ! prefactor_dir                         = /project/sksp/Software/prefactor
 ! losoto_directory                     = /opt/lofar/losoto
 ! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
@@ -46,6 +47,7 @@
 
 #! ddf_soldir = PREFACTOR_SCRATCH_DIR/Input/SOLSDIR
 ! ddf_soldir = /project/sksp/Data/L659948_4ch_4s/lotss_products/SOLSDIR/
+! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
 ! delaycal_col = DATA_DI_CORRECTED
 
 ! rfistrategy			= HBAdefault
@@ -64,12 +66,11 @@
 ! substep_cleanup = ,cleanup
 
 #pipeline.steps = [ setup, prep, apply_ddf, subtract_lotss ]
-#pipeline.steps = [ setup, subtract_lotss ]
-pipeline.steps = [ setup ]
+pipeline.steps = [ setup, subtract_lotss ]
 
-pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, make_box ]
+pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
 pipeline.steps.apply_ddf = [ createmap_ddf, ddf_solutions, ddf_h5parms, convert_to_h5, expand_concat_map, addIS, h5imp_map_ddf, h5imp_ddf, ndppp_applycal ]
-#pipeline.steps.subtract_lotss = [ make_box ]
+pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products]
 
 
 ###########################################################################
@@ -119,6 +120,14 @@ createmap_target_list.control.method          =   mapfile_all_to_one
 createmap_target_list.control.mapfile_dir     =   input.output.mapfile_dir
 createmap_target_list.control.filename        =   combine_data_tar_map.mapfile
 createmap_target_list.control.mapfile_in      =   createmap_target.output.mapfile
+
+cp_data.control.kind            = recipe
+cp_data.control.type            = executable_args
+cp_data.control.executable      = /bin/cp
+cp_data.control.max_per_node    = 1
+cp_data.control.mapfile_in      = createmap_target.output.mapfile
+cp_data.control.inputkey        = file
+cp_data.argument.flags          = [-r,file,.]
 
 ###################################################################
 ##                                                               ##
@@ -231,10 +240,38 @@ make_box.control.inputkey       = msin
 make_box.argument.msfile        = msin
 make_box.argument.box_size      = 2.5
 
-#subtract_6asec.control.type = pythonplugin
-#subtract_6asec.control.max_per_node            = {{ num_proc_per_node }}
-#subtract_6asec.control.error_tolerance         = {{ error_tolerance }}
-#subtract_6asec.control.mapfile_in              = dpppconcat.output.mapfile
-#subtract_6asec.control.inputkey                = msfiles
-#subtract_6asec.argument
+make_mslist.control.kind            = recipe
+make_mslist.control.type            = executable_args
+make_mslist.control.executable      = {{ ddf_pipeline_dir }}/scripts/make_mslists.py
+make_mslist.control.max_per_node    = 1
+make_mslist.control.skip_infile     = True
+make_mslist.control.mapfile_in      = createmap_target_list.output.mapfile
+make_mslist.argument.flags          = [force]
 
+# generate a mapfile of all the target data
+createmap_lotss_sols.control.kind             = plugin
+createmap_lotss_sols.control.type             = createMapfile
+createmap_lotss_sols.control.method           = mapfile_from_folder
+createmap_lotss_sols.control.mapfile_dir      = input.output.mapfile_dir
+createmap_lotss_sols.control.filename         = createmap_lotss_sols.mapfile
+createmap_lotss_sols.control.folder           = {{ ddf_dir }}
+createmap_lotss_sols.control.pattern          = DDS3*.npz
+
+# Copy over the products that are required for the subtract.
+cp_lotss_products.control.kind            = recipe
+cp_lotss_products.control.type            = executable_args
+cp_lotss_products.control.executable      = /bin/cp
+cp_lotss_products.control.max_per_node    = 1
+cp_lotss_products.control.mapfile_in      = createmap_lotss_sols.output.mapfile
+cp_lotss_products.control.inputkey        = sols
+cp_lotss_products.argument.flags          = [-r,sols,{{ ddf_dir }}/image_dirin_SSD_m.npy.ClusterCat.npy,{{ ddf_dir }}/image_full_ampphase_di_m.NS.DicoModel,{{ ddf_dir }}/image_full_ampphase_di_m.NS.mask01.fits,{{ ddf_dir }}/SOLSDIR,.]
+
+# This bit needs quite a bit of memory. A whole node or at least 256 GB should be allocated to it.
+subtract_6asec.control.kind                     = recipe
+subtract_6asec.control.type                     = executable_args
+subtract_6asec.control.executable               = {{ ddf_pipeline_dir }}/scripts/sub-sources-outside-region.py
+subtract_6asec.control.max_per_node             = 1
+subtract_6asec.control.error_tolerance          = {{ error_tolerance }}
+subtract_6asec.control.mapfile_in               = createmap_target.output.mapfile
+subtract_6asec.control.skip_infile              = True
+subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--column,{{ delaycal_col }},--freqavg,1,--timeavg,1,--ncpu,24,--prefixname,sub6asec]
