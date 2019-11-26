@@ -1,0 +1,240 @@
+##########################################################
+## Please update these parameters. 			##
+##########################################################
+
+# software paths
+! long_baseline_pipeline_dir            = /project/sksp/Software/long_baseline_pipeline
+! widefield_dir = /project/sksp/Software/lofar-highres-widefield
+! prefactor_dir                         = /project/sksp/Software/prefactor
+! losoto_directory                     = /opt/lofar/losoto
+! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
+! lofar_directory 			= $LOFARROOT
+
+# ## target data information
+#! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
+! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
+! target_input_pattern          = L*.ms
+
+## Stations to flag
+! flag_baselines                = [ ] ## for HBA data before October 2015, should set to: [ CS013HBA* ]
+
+##########################################################
+## These parameters may need to be updated.		##
+##########################################################
+
+## Output directories
+! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
+! results_directory             = {{ job_directory }}/results
+! inspection_directory          = {{ results_directory }}/inspection/
+! cal_values_directory          = {{ results_directory }}/results/cal_values
+
+## Runtime setup -- will depend on your computing cluster
+! num_proc_per_node             = input.output.max_per_node    ## number of processes to use per step per node
+! num_proc_per_node_limit       = 4     ## number of processes to use per step per node for tasks with high i/o (dppp or cp) or memory (eg calibration)
+! max_dppp_threads              = 9     ## number of threads per process for NDPPP
+! error_tolerance               = False ## False = stop if any subband fails, True = keep going
+
+##########################################################
+## Changing these will probably break something.	##
+##########################################################
+
+## global information
+! base_directory                        = input.output.working_directory  
+! job_directory                         = input.output.job_directory      
+! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
+! prefactor_scripts			= {{ prefactor_dir }}/scripts
+
+#! ddf_soldir = PREFACTOR_SCRATCH_DIR/Input/SOLSDIR
+! ddf_soldir = /project/sksp/Data/L659948_4ch_4s/lotss_products/SOLSDIR/
+! delaycal_col = DATA_DI_CORRECTED
+
+! rfistrategy			= HBAdefault
+! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
+
+##
+## END CONFIGURATION
+
+
+##########################################################
+## Steps to run.					##
+##########################################################
+
+! substep_clip = clipATeam, ## leave blank for no a-team clipping
+! substep_flag = # aoflagging,  ## turned off by default
+! substep_cleanup = ,cleanup
+
+#pipeline.steps = [ setup, prep, apply_ddf, subtract_lotss ]
+#pipeline.steps = [ setup, subtract_lotss ]
+pipeline.steps = [ setup ]
+
+pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, make_box ]
+pipeline.steps.apply_ddf = [ createmap_ddf, ddf_solutions, ddf_h5parms, convert_to_h5, expand_concat_map, addIS, h5imp_map_ddf, h5imp_ddf, ndppp_applycal ]
+#pipeline.steps.subtract_lotss = [ make_box ]
+
+
+###########################################################################
+
+
+##################################################################################################################
+##														##
+##			BEGIN PIPELINE: DO NOT UPDATE BELOW THIS LINE!						##
+##														##
+##################################################################################################################
+
+## create directories
+
+# create the results directory if needed
+mk_results_dir.control.kind               = plugin
+mk_results_dir.control.type               = makeDirectory
+mk_results_dir.control.directory          = {{ results_directory }}
+
+# create the inspection_directory if needed
+mk_inspect_dir.control.kind               = plugin
+mk_inspect_dir.control.type               = makeDirectory
+mk_inspect_dir.control.directory          = {{ inspection_directory }}
+
+# create the cal_values_directory if needed
+mk_cal_values_dir.control.kind               =  plugin
+mk_cal_values_dir.control.type               =  makeDirectory
+mk_cal_values_dir.control.directory          =  {{ cal_values_directory }}
+
+# create a directory for the ionex files
+mk_ionex_dir.control.kind		  = plugin
+mk_ionex_dir.control.type		  = makeDirectory
+mk_ionex_dir.control.directory		  = {{ ionex_path }}
+
+# generate a mapfile of all the target data
+createmap_target.control.kind             = plugin
+createmap_target.control.type             = createMapfile
+createmap_target.control.method           = mapfile_from_folder
+createmap_target.control.mapfile_dir      = input.output.mapfile_dir
+createmap_target.control.filename         = createmap_target.mapfile
+createmap_target.control.folder           = {{ target_input_path }}
+createmap_target.control.pattern          = {{ target_input_pattern }}
+
+# convert to a mapfile with all subbands in one list
+createmap_target_list.control.kind            =   plugin
+createmap_target_list.control.type            =   createMapfile
+createmap_target_list.control.method          =   mapfile_all_to_one
+createmap_target_list.control.mapfile_dir     =   input.output.mapfile_dir
+createmap_target_list.control.filename        =   combine_data_tar_map.mapfile
+createmap_target_list.control.mapfile_in      =   createmap_target.output.mapfile
+
+###################################################################
+##                                                               ##
+##            OPTIONAL -- APPLY DDF SOLUTIONS                    ##
+##                                                               ##
+###################################################################
+
+# find the ddf solutions
+createmap_ddf.control.kind             = plugin
+createmap_ddf.control.type             = createMapfile
+createmap_ddf.control.method           = mapfile_from_folder
+createmap_ddf.control.mapfile_dir      = input.output.mapfile_dir
+createmap_ddf.control.filename         = createmap_ddf.mapfile
+createmap_ddf.control.folder           = {{ ddf_soldir }}
+createmap_ddf.control.pattern          = L*pre-cal.ms
+
+# get mapfile of npz
+ddf_solutions.control.kind               =  plugin
+ddf_solutions.control.type               =  createMapfile
+ddf_solutions.control.method             =  add_suffix_to_file
+ddf_solutions.control.mapfile_in         =  createmap_ddf.output.mapfile
+ddf_solutions.control.add_suffix_to_file =  /killMS.DIS2_full.sols.npz
+ddf_solutions.control.mapfile_dir        =  input.output.mapfile_dir
+ddf_solutions.control.filename          =  ddf_solutions.mapfile
+
+# make mapfile for output h5parms
+ddf_h5parms.control.kind        = plugin
+ddf_h5parms.control.type        = makeResultsMapfile
+ddf_h5parms.control.mapfile_dir        = input.output.mapfile_dir
+ddf_h5parms.control.filename        = ddf_h5parms.mapfile
+ddf_h5parms.control.mapfile_in        = createmap_ddf.output.mapfile
+ddf_h5parms.control.target_dir        = {{ job_directory }}
+ddf_h5parms.control.new_suffix        = _ddf.h5
+
+# run losoto to convert
+convert_to_h5.control.kind            = recipe
+convert_to_h5.control.type            = executable_args
+convert_to_h5.control.executable        = {{ losoto_directory }}/bin/killMS2H5parm.py
+convert_to_h5.control.max_per_node        = {{ num_proc_per_node }}
+convert_to_h5.control.mapfiles_in        = [ddf_h5parms.output.mapfile,ddf_solutions.output.mapfile]
+convert_to_h5.control.inputkeys            = [outputh5,inputnpz]
+convert_to_h5.argument.flags            = [outputh5,inputnpz]
+
+expand_concat_map.control.kind                      = plugin
+expand_concat_map.control.type                      = expandMapfile
+expand_concat_map.control.mapfile_in                = dpppconcat.output.mapfile
+expand_concat_map.control.mapfile_to_match          = ddf_h5parms.output.mapfile
+expand_concat_map.control.mapfile_dir               = input.output.mapfile_dir
+expand_concat_map.control.filename                  = expand_concat_map.mapfile
+
+# add the international stations
+# addIS.control.kind                = recipe
+addIS.control.type                = pythonplugin
+addIS.control.executable            = {{ long_baseline_pipeline_dir }}/bin/addIS_to_h5.py
+addIS.control.max_per_node            = {{ num_proc_per_node }}
+addIS.control.mapfiles_in            = [expand_concat_map.output.mapfile,ddf_h5parms.output.mapfile]
+addIS.control.inputkeys                = [msin,h5parms]
+addIS.argument.solset_in            = sol000
+addIS.argument.solset_out            = sol001
+addIS.argument.do_int_stations            = True
+addIS.argument.flags                = [h5parms,msin]
+
+# generate a mapfile with all files in a single entry
+h5imp_ddf_map.control.kind              =   plugin
+h5imp_ddf_map.control.type              =   compressMapfile
+h5imp_ddf_map.control.mapfile_in        =   ddf_h5parms.output.mapfile
+h5imp_ddf_map.control.mapfile_dir       =   input.output.mapfile_dir
+h5imp_ddf_map.control.filename          =   h5imp_ddf_map
+
+# collect all instrument tables into one h5parm
+h5imp_ddf.control.kind                  =   recipe
+h5imp_ddf.control.type                  =   executable_args
+h5imp_ddf.control.executable            =   {{ losoto_directory }}/bin/H5parm_collector.py
+h5imp_ddf.control.error_tolerance       =   {{ error_tolerance }}
+h5imp_ddf.control.mapfile_in            =   h5imp_ddf_map.output.mapfile
+h5imp_ddf.control.inputkey              =   h5parm
+h5imp_ddf.argument.flags                =   [-v,-c,h5parm]
+h5imp_ddf.argument.outh5parm            =   {{ job_directory }}/ddf_solutions.h5
+h5imp_ddf.argument.insolset             =   sol001
+
+# apply the solutions
+ndppp_applycal.control.type                    = dppp
+ndppp_applycal.control.max_per_node            = {{ num_proc_per_node }}
+ndppp_applycal.control.error_tolerance         = {{ error_tolerance }}
+ndppp_applycal.control.mapfile_in              = dpppconcat.output.mapfile
+ndppp_applycal.control.inputkey                = msfiles
+ndppp_applycal.control.inplace            = True
+ndppp_applycal.argument.numthreads             = {{ max_dppp_threads }}
+ndppp_applycal.argument.msin                   = msfiles
+ndppp_applycal.argument.msin.datacolumn        = DATA
+ndppp_applycal.argument.msin.baseline          = *&
+ndppp_applycal.argument.msout.datacolumn       = {{ delaycal_col }}
+ndppp_applycal.argument.msout.writefullresflag = False
+ndppp_applycal.argument.msout.storagemanager   = dysco
+ndppp_applycal.argument.steps                  = [applyddf]
+ndppp_applycal.argument.applyddf.type           = applycal
+ndppp_applycal.argument.applyddf.parmdb         = {{ job_directory }}/ddf_solutions.h5
+ndppp_applycal.argument.applyddf.correction     = fulljones
+ndppp_applycal.argument.applyddf.solset         = sol000
+ndppp_applycal.argument.applyddf.soltab = [amplitude000,phase000]
+
+#
+# Subtract LoTSS 6'' model
+#
+make_box.control.type           = pythonplugin
+make_box.control.executable     = {{ widefield_dir }}/utils/make_box.py
+make_box.control.max_per_node   = {{ num_proc_per_node }}
+make_box.control.mapfile_in     = createmap_target_list.output.mapfile
+make_box.control.inputkey       = msin
+make_box.argument.msfile        = msin
+make_box.argument.box_size      = 2.5
+
+#subtract_6asec.control.type = pythonplugin
+#subtract_6asec.control.max_per_node            = {{ num_proc_per_node }}
+#subtract_6asec.control.error_tolerance         = {{ error_tolerance }}
+#subtract_6asec.control.mapfile_in              = dpppconcat.output.mapfile
+#subtract_6asec.control.inputkey                = msfiles
+#subtract_6asec.argument
+
