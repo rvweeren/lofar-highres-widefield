@@ -1,3 +1,0 @@
-run_ddf.sh
-run_selfcal.sh
-run_wsclean.sh

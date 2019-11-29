@@ -1,5 +1,0 @@
-msout = .
-
-steps = [flag]
-flag.type = preflagger
-flag.baseline = ^[CR]S*&*
