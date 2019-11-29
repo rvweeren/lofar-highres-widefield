@@ -45,10 +45,9 @@
 ! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
 ! prefactor_scripts			= {{ prefactor_dir }}/scripts
 
-#! ddf_soldir = PREFACTOR_SCRATCH_DIR/Input/SOLSDIR
-! ddf_soldir = /project/sksp/Data/L659948_4ch_4s/lotss_products/SOLSDIR/
 ! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
-! delaycal_col = DATA
+! datadi_col = DATA
+! delaycal_soldir = /project/sksp/Data/L659948_4ch_4s/infield_calibrator
 
 ! rfistrategy			= HBAdefault
 ! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
@@ -65,10 +64,11 @@
 ! substep_flag = # aoflagging,  ## turned off by default
 ! substep_cleanup = ,cleanup
 
-pipeline.steps = [ setup, subtract_lotss ]
+pipeline.steps = [ setup, subtract_lotss, apply_di ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
 pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
+pipeline.steps.apply_di = [createmap_subtracted]
 
 
 ###########################################################################
@@ -172,4 +172,16 @@ subtract_6asec.control.max_per_node             = 1
 subtract_6asec.control.error_tolerance          = {{ error_tolerance }}
 subtract_6asec.control.mapfile_in               = createmap_target.output.mapfile
 subtract_6asec.control.skip_infile              = True
-subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--column,{{ delaycal_col }},--freqavg,1,--timeavg,1,--ncpu,24,--prefixname,sub6asec]
+subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--column,{{ datadi_col }},--freqavg,1,--timeavg,1,--ncpu,24,--prefixname,sub6asec,--nophaseshift,--noconcat,--keeplongbaselines]
+
+#
+# Apply infield calibrator solutions
+#
+# Generate a mapfile of all the LoTSS subtracted data
+createmap_subtracted.control.kind             = plugin
+createmap_subtracted.control.type             = createMapfile
+createmap_subtracted.control.method           = mapfile_from_folder
+createmap_subtracted.control.mapfile_dir      = input.output.mapfile_dir
+createmap_subtracted.control.filename         = createmap_subtracted.mapfile
+createmap_subtracted.control.folder           = input.output.jobdirectory
+createmap_subtracted.control.pattern          = sub6asec*
