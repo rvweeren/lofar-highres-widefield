@@ -65,11 +65,9 @@
 ! substep_flag = # aoflagging,  ## turned off by default
 ! substep_cleanup = ,cleanup
 
-#pipeline.steps = [ setup, apply_ddf, subtract_lotss ]
 pipeline.steps = [ setup, subtract_lotss ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
-pipeline.steps.apply_ddf = [ createmap_ddf, ddf_solutions, ddf_h5parms, convert_to_h5, expand_concat_map, addIS, h5imp_map_ddf, h5imp_ddf, ndppp_applycal ]
 pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
 
 
@@ -128,106 +126,6 @@ cp_data.control.max_per_node    = 1
 cp_data.control.mapfile_in      = createmap_target.output.mapfile
 cp_data.control.inputkey        = file
 cp_data.argument.flags          = [-r,file,.]
-
-###################################################################
-##                                                               ##
-##            OPTIONAL -- APPLY DDF SOLUTIONS                    ##
-##                                                               ##
-###################################################################
-
-# find the ddf solutions
-createmap_ddf.control.kind             = plugin
-createmap_ddf.control.type             = createMapfile
-createmap_ddf.control.method           = mapfile_from_folder
-createmap_ddf.control.mapfile_dir      = input.output.mapfile_dir
-createmap_ddf.control.filename         = createmap_ddf.mapfile
-createmap_ddf.control.folder           = {{ ddf_soldir }}
-createmap_ddf.control.pattern          = L*pre-cal.ms
-
-# get mapfile of npz
-ddf_solutions.control.kind               =  plugin
-ddf_solutions.control.type               =  createMapfile
-ddf_solutions.control.method             =  add_suffix_to_file
-ddf_solutions.control.mapfile_in         =  createmap_ddf.output.mapfile
-ddf_solutions.control.add_suffix_to_file =  /killMS.DIS2_full.sols.npz
-ddf_solutions.control.mapfile_dir        =  input.output.mapfile_dir
-ddf_solutions.control.filename          =  ddf_solutions.mapfile
-
-# make mapfile for output h5parms
-ddf_h5parms.control.kind        = plugin
-ddf_h5parms.control.type        = makeResultsMapfile
-ddf_h5parms.control.mapfile_dir        = input.output.mapfile_dir
-ddf_h5parms.control.filename        = ddf_h5parms.mapfile
-ddf_h5parms.control.mapfile_in        = createmap_ddf.output.mapfile
-ddf_h5parms.control.target_dir        = {{ job_directory }}
-ddf_h5parms.control.new_suffix        = _ddf.h5
-
-# run losoto to convert
-convert_to_h5.control.kind            = recipe
-convert_to_h5.control.type            = executable_args
-convert_to_h5.control.executable        = {{ losoto_directory }}/bin/killMS2H5parm.py
-convert_to_h5.control.max_per_node        = {{ num_proc_per_node }}
-convert_to_h5.control.mapfiles_in        = [ddf_h5parms.output.mapfile,ddf_solutions.output.mapfile]
-convert_to_h5.control.inputkeys            = [outputh5,inputnpz]
-convert_to_h5.argument.flags            = [outputh5,inputnpz]
-
-expand_concat_map.control.kind                      = plugin
-expand_concat_map.control.type                      = expandMapfile
-expand_concat_map.control.mapfile_in                = dpppconcat.output.mapfile
-expand_concat_map.control.mapfile_to_match          = ddf_h5parms.output.mapfile
-expand_concat_map.control.mapfile_dir               = input.output.mapfile_dir
-expand_concat_map.control.filename                  = expand_concat_map.mapfile
-
-# add the international stations
-# addIS.control.kind                = recipe
-addIS.control.type                = pythonplugin
-addIS.control.executable            = {{ long_baseline_pipeline_dir }}/bin/addIS_to_h5.py
-addIS.control.max_per_node            = {{ num_proc_per_node }}
-addIS.control.mapfiles_in            = [expand_concat_map.output.mapfile,ddf_h5parms.output.mapfile]
-addIS.control.inputkeys                = [msin,h5parms]
-addIS.argument.solset_in            = sol000
-addIS.argument.solset_out            = sol001
-addIS.argument.do_int_stations            = True
-addIS.argument.flags                = [h5parms,msin]
-
-# generate a mapfile with all files in a single entry
-h5imp_ddf_map.control.kind              =   plugin
-h5imp_ddf_map.control.type              =   compressMapfile
-h5imp_ddf_map.control.mapfile_in        =   ddf_h5parms.output.mapfile
-h5imp_ddf_map.control.mapfile_dir       =   input.output.mapfile_dir
-h5imp_ddf_map.control.filename          =   h5imp_ddf_map
-
-# collect all instrument tables into one h5parm
-h5imp_ddf.control.kind                  =   recipe
-h5imp_ddf.control.type                  =   executable_args
-h5imp_ddf.control.executable            =   {{ losoto_directory }}/bin/H5parm_collector.py
-h5imp_ddf.control.error_tolerance       =   {{ error_tolerance }}
-h5imp_ddf.control.mapfile_in            =   h5imp_ddf_map.output.mapfile
-h5imp_ddf.control.inputkey              =   h5parm
-h5imp_ddf.argument.flags                =   [-v,-c,h5parm]
-h5imp_ddf.argument.outh5parm            =   {{ job_directory }}/ddf_solutions.h5
-h5imp_ddf.argument.insolset             =   sol001
-
-# apply the solutions
-ndppp_applycal.control.type                    = dppp
-ndppp_applycal.control.max_per_node            = {{ num_proc_per_node }}
-ndppp_applycal.control.error_tolerance         = {{ error_tolerance }}
-ndppp_applycal.control.mapfile_in              = dpppconcat.output.mapfile
-ndppp_applycal.control.inputkey                = msfiles
-ndppp_applycal.control.inplace            = True
-ndppp_applycal.argument.numthreads             = {{ max_dppp_threads }}
-ndppp_applycal.argument.msin                   = msfiles
-ndppp_applycal.argument.msin.datacolumn        = DATA
-ndppp_applycal.argument.msin.baseline          = *&
-ndppp_applycal.argument.msout.datacolumn       = {{ delaycal_col }}
-ndppp_applycal.argument.msout.writefullresflag = False
-ndppp_applycal.argument.msout.storagemanager   = dysco
-ndppp_applycal.argument.steps                  = [applyddf]
-ndppp_applycal.argument.applyddf.type           = applycal
-ndppp_applycal.argument.applyddf.parmdb         = {{ job_directory }}/ddf_solutions.h5
-ndppp_applycal.argument.applyddf.correction     = fulljones
-ndppp_applycal.argument.applyddf.solset         = sol000
-ndppp_applycal.argument.applyddf.soltab = [amplitude000,phase000]
 
 #
 # Subtract LoTSS 6'' model
