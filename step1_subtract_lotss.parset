@@ -47,7 +47,8 @@
 
 ! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
 ! datadi_col = DATA
-! delaycal_soldir = /project/sksp/Data/L659948_4ch_4s/infield_calibrator
+! delaycal_phase = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
+! delaycal_amp = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
 
 ! rfistrategy			= HBAdefault
 ! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
@@ -64,11 +65,12 @@
 ! substep_flag = # aoflagging,  ## turned off by default
 ! substep_cleanup = ,cleanup
 
-pipeline.steps = [ setup, subtract_lotss, apply_di ]
+pipeline.steps = [ setup, subtract_lotss, apply_di, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
 pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
-pipeline.steps.apply_di = [createmap_subtracted]
+pipeline.steps.apply_di = [ createmap_subtracted, apply_infield]
+pipeline.steps.finalize = [ make_results_mapfile, move_results]
 
 
 ###########################################################################
@@ -177,7 +179,7 @@ subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--colum
 #
 # Apply infield calibrator solutions
 #
-# Generate a mapfile of all the LoTSS subtracted data
+# Generate a mapfile of all the LoTSS subtracted data.
 createmap_subtracted.control.kind             = plugin
 createmap_subtracted.control.type             = createMapfile
 createmap_subtracted.control.method           = mapfile_from_folder
@@ -185,3 +187,43 @@ createmap_subtracted.control.mapfile_dir      = input.output.mapfile_dir
 createmap_subtracted.control.filename         = createmap_subtracted.mapfile
 createmap_subtracted.control.folder           = input.output.jobdirectory
 createmap_subtracted.control.pattern          = sub6asec*
+
+# Apply infield calibrator solutions.
+apply_infield.control.type              = dppp
+apply_infield.control.max_per_node      = {{ num_proc_per_node_limit }}
+apply_infield.control.error_tolerance   = {{ error_tolerance }}
+apply_infield.control.mapfiles_in       = [createmap_subtracted.output.mapfile]
+apply_infield.control.inputkeys         = [input_file]
+apply_infield.argument.numthreads       = {{ max_dppp_threads }}
+apply_infield.argument.msin             = input_file
+apply_infield.argument.msin.datacolumn  = DATA_SUB
+apply_infield.argument.msout.overwrite  = True
+apply_infield.argument.msout.storagemanager = dysco
+apply_infield.argument.steps            = [apply_phase, apply_amp]
+apply_infield.argument.steps.apply_phase.type   = applycal
+apply_infield.argument.steps.apply_phase.parmdb   = {{ delaycal_phase }}
+apply_infield.argument.steps.apply_phase.solset   = sol001
+apply_infield.argument.steps.apply_phase.correction   = phase000
+apply_infield.argument.steps.apply_amp.type   = applycal
+apply_infield.argument.steps.apply_amp.parmdb   = {{ delaycal_amp }}
+apply_infield.argument.steps.apply_amp.solset   = sol001
+apply_infield.argument.steps.apply_amp.correction   = amplitude000
+
+# Move the corrected datasets to the results folder.
+make_results_mapfile.control.kind                        =   plugin
+make_results_mapfile.control.type                        =   makeResultsMapfile
+make_results_mapfile.control.mapfile_dir                 =   input.output.mapfile_dir
+make_results_mapfile.control.filename                    =   make_results_mapfile.mapfile
+make_results_mapfile.control.mapfile_in                  =   apply_infield.output.mapfile
+make_results_mapfile.control.target_dir                  =   {{ results_directory }}
+make_results_mapfile.control.make_target_dir             =   True
+make_results_mapfile.control.new_suffix                  =   .ifcorr.ms
+
+# move the results to where we want them
+move_results.control.kind                                =   recipe
+move_results.control.type                                =   executable_args
+move_results.control.executable                          =   /bin/mv
+move_results.control.max_per_node                        =   {{ num_proc_per_node_limit }}
+move_results.control.mapfiles_in                         =   [apply_infield.output.mapfile,make_results_mapfile.output.mapfile]
+move_results.control.inputkeys                           =   [source,destination]
+move_results.control.arguments                           =   [source,destination]
