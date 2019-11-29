@@ -12,8 +12,8 @@
 ! lofar_directory 			= $LOFARROOT
 
 # ## target data information
-#! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
-! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
+! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
+#! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
 ! target_input_pattern          = L*.ms
 
 ## Stations to flag
@@ -48,7 +48,7 @@
 #! ddf_soldir = PREFACTOR_SCRATCH_DIR/Input/SOLSDIR
 ! ddf_soldir = /project/sksp/Data/L659948_4ch_4s/lotss_products/SOLSDIR/
 ! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
-! delaycal_col = DATA_DI_CORRECTED
+! delaycal_col = DATA
 
 ! rfistrategy			= HBAdefault
 ! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
@@ -65,12 +65,12 @@
 ! substep_flag = # aoflagging,  ## turned off by default
 ! substep_cleanup = ,cleanup
 
-#pipeline.steps = [ setup, prep, apply_ddf, subtract_lotss ]
+#pipeline.steps = [ setup, apply_ddf, subtract_lotss ]
 pipeline.steps = [ setup, subtract_lotss ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
 pipeline.steps.apply_ddf = [ createmap_ddf, ddf_solutions, ddf_h5parms, convert_to_h5, expand_concat_map, addIS, h5imp_map_ddf, h5imp_ddf, ndppp_applycal ]
-pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products]
+pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
 
 
 ###########################################################################
