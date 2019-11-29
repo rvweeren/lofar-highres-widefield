@@ -200,14 +200,14 @@ apply_infield.argument.msin.datacolumn  = DATA_SUB
 apply_infield.argument.msout.overwrite  = True
 apply_infield.argument.msout.storagemanager = dysco
 apply_infield.argument.steps            = [apply_phase, apply_amp]
-apply_infield.argument.steps.apply_phase.type   = applycal
-apply_infield.argument.steps.apply_phase.parmdb   = {{ delaycal_phase }}
-apply_infield.argument.steps.apply_phase.solset   = sol001
-apply_infield.argument.steps.apply_phase.correction   = phase000
-apply_infield.argument.steps.apply_amp.type   = applycal
-apply_infield.argument.steps.apply_amp.parmdb   = {{ delaycal_amp }}
-apply_infield.argument.steps.apply_amp.solset   = sol001
-apply_infield.argument.steps.apply_amp.correction   = amplitude000
+apply_infield.argument.apply_phase.type   = applycal
+apply_infield.argument.apply_phase.parmdb   = {{ delaycal_phase }}
+apply_infield.argument.apply_phase.solset   = sol001
+apply_infield.argument.apply_phase.correction   = phase000
+apply_infield.argument.apply_amp.type   = applycal
+apply_infield.argument.apply_amp.parmdb   = {{ delaycal_amp }}
+apply_infield.argument.apply_amp.solset   = sol001
+apply_infield.argument.apply_amp.correction   = amplitude000
 
 # Move the corrected datasets to the results folder.
 make_results_mapfile.control.kind                        =   plugin
