@@ -10,12 +10,11 @@ The end result of the pipeline is currently a 1'' map that is direction-independ
 5. Produce a PyBDSF catalogue of the image.
 6. Produce DP3 parsets to split out potential DDE calibrators.
 
-To run the pipeline, set the appropriate settings in the config file and run:
-```
-wifi.py lb_widefield.cfg
-```
+The pipeline is split up in different steps, to accomodate a Grid workflow. Each can be run individually in the genericpipeline framework as
 
-Tyipcal runtime on a Leiden node is about a week for the 1'' DI image.
+```
+genericpipeline.py <step>.parset
+```
 
 Requirements
 ------------
