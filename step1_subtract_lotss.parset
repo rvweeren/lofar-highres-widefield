@@ -179,20 +179,11 @@ subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--colum
 #
 # Apply infield calibrator solutions
 #
-# Generate a mapfile of all the LoTSS subtracted data.
-createmap_subtracted.control.kind             = plugin
-createmap_subtracted.control.type             = createMapfile
-createmap_subtracted.control.method           = mapfile_from_folder
-createmap_subtracted.control.mapfile_dir      = input.output.mapfile_dir
-createmap_subtracted.control.filename         = createmap_subtracted.mapfile
-createmap_subtracted.control.folder           = input.output.jobdirectory
-createmap_subtracted.control.pattern          = sub6asec*
-
 # Apply infield calibrator solutions.
 apply_infield.control.type              = dppp
 apply_infield.control.max_per_node      = {{ num_proc_per_node_limit }}
 apply_infield.control.error_tolerance   = {{ error_tolerance }}
-apply_infield.control.mapfiles_in       = [createmap_subtracted.output.mapfile]
+apply_infield.control.mapfiles_in       = [subtract_6asec.output.mapfile]
 apply_infield.control.inputkeys         = [input_file]
 apply_infield.argument.numthreads       = {{ max_dppp_threads }}
 apply_infield.argument.msin             = input_file
