@@ -172,7 +172,7 @@ subtract_6asec.control.type                     = executable_args
 subtract_6asec.control.executable               = {{ ddf_pipeline_dir }}/scripts/sub-sources-outside-region.py
 subtract_6asec.control.max_per_node             = 1
 subtract_6asec.control.error_tolerance          = {{ error_tolerance }}
-subtract_6asec.control.mapfile_in               = createmap_target.output.mapfile
+subtract_6asec.control.mapfile_in               = cp_data.output.mapfile
 subtract_6asec.control.skip_infile              = True
 subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--column,{{ datadi_col }},--freqavg,1,--timeavg,1,--ncpu,24,--prefixname,sub6asec,--nophaseshift,--noconcat,--keeplongbaselines]
 
