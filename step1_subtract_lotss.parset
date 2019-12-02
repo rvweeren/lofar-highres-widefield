@@ -208,7 +208,7 @@ make_results_mapfile.control.filename                    =   make_results_mapfil
 make_results_mapfile.control.mapfile_in                  =   apply_infield.output.mapfile
 make_results_mapfile.control.target_dir                  =   {{ results_directory }}
 make_results_mapfile.control.make_target_dir             =   True
-make_results_mapfile.control.new_suffix                  =   .ifcorr.ms
+make_results_mapfile.control.new_suffix                  =   .sub6asec.ifcorr.ms
 
 # move the results to where we want them
 move_results.control.kind                                =   recipe
