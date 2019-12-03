@@ -41,8 +41,7 @@
 ##########################################################
 
 ## global information
-! base_directory                        = input.output.working_directory  
-! job_directory                         = input.output.job_directory      
+! working_directory         = input.output.working_directory/input.output.job_name
 ! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
 ! prefactor_scripts			= {{ prefactor_dir }}/scripts
 
@@ -69,7 +68,7 @@
 pipeline.steps = [ setup, image_1asec, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
-pipeline.steps.image_1asec = [ make_image, createmap_image_i, make_source_list]
+pipeline.steps.image_1asec = [ average_data, make_image, createmap_image_i, make_source_list]
 pipeline.steps.finalize = [ make_results_mapfile, move_results]
 
 
@@ -113,6 +112,16 @@ createmap_target.control.filename         = createmap_target.mapfile
 createmap_target.control.folder           = {{ target_input_path }}
 createmap_target.control.pattern          = {{ target_input_pattern }}
 
+createmap_preptarg.control.kind                                =   plugin
+createmap_preptarg.control.type                                =   makeResultsMapfile
+createmap_preptarg.control.mapfile_dir                         =   input.output.mapfile_dir
+createmap_preptarg.control.filename                            =   createmap_preptarg.mapfile
+createmap_preptarg.control.mapfile_in                          =   createmap_target.output.mapfile
+createmap_preptarg.control.target_dir                          =   {{ working_directory }}
+createmap_preptarg.control.make_target_dir                     =   False
+createmap_preptarg.control.new_suffix                          =   .ms
+
+
 # convert to a mapfile with all subbands in one list
 createmap_target_list.control.kind            =   plugin
 createmap_target_list.control.type            =   createMapfile
@@ -125,15 +134,32 @@ cp_data.control.kind            = recipe
 cp_data.control.type            = executable_args
 cp_data.control.executable      = /bin/cp
 cp_data.control.max_per_node    = 1
-cp_data.control.mapfile_in      = createmap_target.output.mapfile
-cp_data.control.inputkey        = file
-cp_data.argument.flags          = [-r,file,.]
+cp_data.control.mapfiles_in     = [createmap_target.output.mapfile, createmap_preptarg.output.mapfile]
+cp_data.control.inputkeys       = [infile,outfile]
+cp_data.argument.flags          = [-r,infile,outfile]
 
 #
 # Make the 1'' image.
 #
 # The sorting logic should be on the pipeline / AGLOW side here.
 # We expect 60 SB to make an initial 1'' image to find suitable DDE calibrators.
+# Average the data to 4ch/4s per subband.
+average_data.control.kind                   = dppp
+average_data.control.max_per_node           = 1
+average_data.control.error_tolerance        = {{ error_tolerance }}
+average_data.control.mapfile_in             = cp_data.output.mapfile
+average_data.inputkey                       = msfile
+average_data.argument.numthreads            = {{ max_dppp_threads }}
+average_data.argument.msin                  = msfile
+average_data.argument.msin.datacolumn       = DATA
+average_data.argument.msout.overwrite       = True
+average_data.argument.msout.storagemanager  = dysco
+average_data.argument.steps                 = [avg]
+average_data.argument.avg.type              = average
+average_data.argument.avg.timeresolution    = 4
+average_data.argument.avg.freqresolution    = 48.82kHz
+
+# Run wsclean for a 1 '' image.
 make_image.control.kind                     = recipe
 make_image.control.type                     = executable_args
 make_image.control.inplace                  = True
@@ -141,7 +167,7 @@ make_image.control.executable               = {{ wsclean_executable }}
 make_image.control.args_format              = wsclean
 make_image.control.max_per_node             = 1
 make_image.control.error_tolerance          = {{ error_tolerance }}
-make_image.mapfiles_in                      = [cp_data]
+make_image.mapfiles_in                      = [average_data.output.mapfile]
 make_image.inputkeys                        = [msfiles]
 make_image.argument.flags                   = [-no-update-model-required, -reorder, -fit-beam, -join-channels, -use-ide, -grid-with-beam, -use-differential-lofar-beam, -multiscale, msfiles]
 make_image.argument.minuv-l                 = 80
