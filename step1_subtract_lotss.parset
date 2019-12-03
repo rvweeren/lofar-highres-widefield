@@ -4,16 +4,15 @@
 
 # software paths
 ! long_baseline_pipeline_dir            = /project/sksp/Software/long_baseline_pipeline
-! widefield_dir = /project/sksp/Software/lofar-highres-widefield
-! ddf_pipeline_dir = /project/sksp/Software/ddf-pipeline
+! widefield_dir                         = /project/sksp/Software/lofar-highres-widefield
+! ddf_pipeline_dir                      = /project/sksp/Software/ddf-pipeline
 ! prefactor_dir                         = /project/sksp/Software/prefactor
-! losoto_directory                     = /opt/lofar/losoto
-! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
-! lofar_directory 			= $LOFARROOT
+! losoto_directory                      = /opt/lofar/losoto
+! aoflagger				                = /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
+! lofar_directory 			            = $LOFARROOT
 
 # ## target data information
 ! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
-#! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
 ! target_input_pattern          = L*.ms
 
 ## Stations to flag
@@ -25,7 +24,7 @@
 
 ## Output directories
 ! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
-! results_directory             = {{ job_directory }}/results
+! results_directory             = $RUNDIR/Output/results
 ! inspection_directory          = {{ results_directory }}/inspection/
 ! cal_values_directory          = {{ results_directory }}/results/cal_values
 
@@ -40,18 +39,14 @@
 ##########################################################
 
 ## global information
-! base_directory                        = input.output.working_directory  
-! job_directory                         = input.output.job_directory      
-! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
+! working_directory         = input.output.working_directory/input.output.job_name
+! scripts			 	    = {{ long_baseline_pipeline_dir }}/bin
 ! prefactor_scripts			= {{ prefactor_dir }}/scripts
 
-! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
-! datadi_col = DATA
-! delaycal_phase = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
-! delaycal_amp = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
-
-! rfistrategy			= HBAdefault
-! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
+! ddf_dir                   = /project/sksp/Data/L659948_4ch_4s/lotss_products
+! datadi_col                = DATA
+! delaycal_phase            = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
+! delaycal_amp              = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
 
 ##
 ## END CONFIGURATION
@@ -60,18 +55,12 @@
 ##########################################################
 ## Steps to run.					##
 ##########################################################
+pipeline.steps = [setup, subtract_lotss, apply_di, finalize]
 
-! substep_clip = clipATeam, ## leave blank for no a-team clipping
-! substep_flag = # aoflagging,  ## turned off by default
-! substep_cleanup = ,cleanup
-
-pipeline.steps = [ setup, subtract_lotss, apply_di, finalize ]
-
-pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
-pipeline.steps.subtract_lotss = [ make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
-pipeline.steps.apply_di = [ createmap_subtracted, apply_infield]
-pipeline.steps.finalize = [ make_results_mapfile, move_results]
-
+pipeline.steps.setup = [mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list, cp_data]
+pipeline.steps.subtract_lotss = [make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
+pipeline.steps.apply_di = [apply_infield]
+pipeline.steps.finalize = [make_results_mapfile, move_results]
 
 ###########################################################################
 
@@ -81,8 +70,6 @@ pipeline.steps.finalize = [ make_results_mapfile, move_results]
 ##			BEGIN PIPELINE: DO NOT UPDATE BELOW THIS LINE!						##
 ##														##
 ##################################################################################################################
-
-## create directories
 
 # create the results directory if needed
 mk_results_dir.control.kind               = plugin
@@ -99,11 +86,6 @@ mk_cal_values_dir.control.kind               =  plugin
 mk_cal_values_dir.control.type               =  makeDirectory
 mk_cal_values_dir.control.directory          =  {{ cal_values_directory }}
 
-# create a directory for the ionex files
-mk_ionex_dir.control.kind		  = plugin
-mk_ionex_dir.control.type		  = makeDirectory
-mk_ionex_dir.control.directory		  = {{ ionex_path }}
-
 # generate a mapfile of all the target data
 createmap_target.control.kind             = plugin
 createmap_target.control.type             = createMapfile
@@ -112,6 +94,16 @@ createmap_target.control.mapfile_dir      = input.output.mapfile_dir
 createmap_target.control.filename         = createmap_target.mapfile
 createmap_target.control.folder           = {{ target_input_path }}
 createmap_target.control.pattern          = {{ target_input_pattern }}
+
+createmap_preptarg.control.kind                                =   plugin
+createmap_preptarg.control.type                                =   makeResultsMapfile
+createmap_preptarg.control.mapfile_dir                         =   input.output.mapfile_dir
+createmap_preptarg.control.filename                            =   createmap_preptarg.mapfile
+createmap_preptarg.control.mapfile_in                          =   createmap_target.output.mapfile
+createmap_preptarg.control.target_dir                          =   {{ working_directory }}
+createmap_preptarg.control.make_target_dir                     =   False
+createmap_preptarg.control.new_suffix                          =   .ms
+
 
 # convert to a mapfile with all subbands in one list
 createmap_target_list.control.kind            =   plugin
@@ -125,9 +117,9 @@ cp_data.control.kind            = recipe
 cp_data.control.type            = executable_args
 cp_data.control.executable      = /bin/cp
 cp_data.control.max_per_node    = 1
-cp_data.control.mapfile_in      = createmap_target.output.mapfile
-cp_data.control.inputkey        = file
-cp_data.argument.flags          = [-r,file,.]
+cp_data.control.mapfiles_in     = [createmap_target.output.mapfile, createmap_preptarg.output.mapfile]
+cp_data.control.inputkeys       = [infile,outfile]
+cp_data.argument.flags          = [-r,infile,outfile]
 
 #
 # Subtract LoTSS 6'' model
@@ -145,6 +137,7 @@ make_mslist.control.type            = executable_args
 make_mslist.control.executable      = {{ ddf_pipeline_dir }}/scripts/make_mslists.py
 make_mslist.control.max_per_node    = 1
 make_mslist.control.skip_infile     = True
+# This mapfile is not actually used. It just needs to run once.
 make_mslist.control.mapfile_in      = createmap_target_list.output.mapfile
 make_mslist.argument.flags          = [force]
 
@@ -169,36 +162,36 @@ cp_lotss_products.argument.flags          = [-r,sols,{{ ddf_dir }}/image_dirin_S
 # This bit needs quite a bit of memory. A whole node or at least 256 GB should be allocated to it.
 subtract_6asec.control.kind                     = recipe
 subtract_6asec.control.type                     = executable_args
-subtract_6asec.control.executable               = {{ ddf_pipeline_dir }}/scripts/sub-sources-outside-region.py
+subtract_6asec.control.executable               = {{ widefield_dir }}/utils/sub-sources-outside-region.py
 subtract_6asec.control.max_per_node             = 1
 subtract_6asec.control.error_tolerance          = {{ error_tolerance }}
-subtract_6asec.control.mapfile_in               = cp_data.output.mapfile
+# Again, this mapfile is not used. DDF.py looks at mslist.txt
+subtract_6asec.control.mapfile_in               = createmap_target_list.output.mapfile
 subtract_6asec.control.skip_infile              = True
-subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--column,{{ datadi_col }},--freqavg,1,--timeavg,1,--ncpu,24,--prefixname,sub6asec,--nophaseshift,--noconcat,--keeplongbaselines]
+subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--column,{{ datadi_col }},--freqavg,1,--timeavg,1,--ncpu,24,--prefixname,sub6asec,--noconcat,--keeplongbaselines,--nophaseshift]
 
 #
 # Apply infield calibrator solutions
 #
-# Apply infield calibrator solutions.
-apply_infield.control.type              = dppp
-apply_infield.control.max_per_node      = {{ num_proc_per_node_limit }}
-apply_infield.control.error_tolerance   = {{ error_tolerance }}
-apply_infield.control.mapfiles_in       = [subtract_6asec.output.mapfile]
-apply_infield.control.inputkeys         = [input_file]
-apply_infield.argument.numthreads       = {{ max_dppp_threads }}
-apply_infield.argument.msin             = input_file
-apply_infield.argument.msin.datacolumn  = DATA_SUB
-apply_infield.argument.msout.overwrite  = True
-apply_infield.argument.msout.storagemanager = dysco
-apply_infield.argument.steps            = [apply_phase, apply_amp]
-apply_infield.argument.apply_phase.type   = applycal
-apply_infield.argument.apply_phase.parmdb   = {{ delaycal_phase }}
-apply_infield.argument.apply_phase.solset   = sol001
+apply_infield.control.type                      = dppp
+apply_infield.control.max_per_node              = {{ num_proc_per_node_limit }}
+apply_infield.control.error_tolerance           = {{ error_tolerance }}
+apply_infield.control.mapfiles_in               = [createmap_preptarg.output.mapfile]
+apply_infield.control.inputkeys                 = [input_file]
+apply_infield.argument.numthreads               = {{ max_dppp_threads }}
+apply_infield.argument.msin                     = input_file
+apply_infield.argument.msin.datacolumn          = DATA_SUB
+apply_infield.argument.msout.overwrite          = True
+apply_infield.argument.msout.storagemanager     = dysco
+apply_infield.argument.steps                    = [apply_phase, apply_amp]
+apply_infield.argument.apply_phase.type         = applycal
+apply_infield.argument.apply_phase.parmdb       = {{ delaycal_phase }}
+apply_infield.argument.apply_phase.solset       = sol001
 apply_infield.argument.apply_phase.correction   = phase000
-apply_infield.argument.apply_amp.type   = applycal
-apply_infield.argument.apply_amp.parmdb   = {{ delaycal_amp }}
-apply_infield.argument.apply_amp.solset   = sol001
-apply_infield.argument.apply_amp.correction   = amplitude000
+apply_infield.argument.apply_amp.type           = applycal
+apply_infield.argument.apply_amp.parmdb         = {{ delaycal_amp }}
+apply_infield.argument.apply_amp.solset         = sol001
+apply_infield.argument.apply_amp.correction     = amplitude000
 
 # Move the corrected datasets to the results folder.
 make_results_mapfile.control.kind                        =   plugin
@@ -208,7 +201,7 @@ make_results_mapfile.control.filename                    =   make_results_mapfil
 make_results_mapfile.control.mapfile_in                  =   apply_infield.output.mapfile
 make_results_mapfile.control.target_dir                  =   {{ results_directory }}
 make_results_mapfile.control.make_target_dir             =   True
-make_results_mapfile.control.new_suffix                  =   .sub6asec.ifcorr.ms
+make_results_mapfile.control.new_suffix                  =   .ifcorr.ms
 
 # move the results to where we want them
 move_results.control.kind                                =   recipe

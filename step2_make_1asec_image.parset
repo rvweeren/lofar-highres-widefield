@@ -1,0 +1,197 @@
+##########################################################
+## Please update these parameters. 			##
+##########################################################
+
+# software paths
+! long_baseline_pipeline_dir            = /project/sksp/Software/long_baseline_pipeline
+! widefield_dir = /project/sksp/Software/lofar-highres-widefield
+! ddf_pipeline_dir = /project/sksp/Software/ddf-pipeline
+! prefactor_dir                         = /project/sksp/Software/prefactor
+! losoto_directory                     = /opt/lofar/losoto
+! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
+! wsclean_executable    = /opt/lofar/wsclean/bin/wsclean
+! lofar_directory 			= $LOFARROOT
+
+# ## target data information
+! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
+#! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
+! target_input_pattern          = L*.ms
+
+## Stations to flag
+! flag_baselines                = [ ] ## for HBA data before October 2015, should set to: [ CS013HBA* ]
+
+##########################################################
+## These parameters may need to be updated.		##
+##########################################################
+
+## Output directories
+! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
+! results_directory             = {{ job_directory }}/results
+! inspection_directory          = {{ results_directory }}/inspection/
+! cal_values_directory          = {{ results_directory }}/results/cal_values
+
+## Runtime setup -- will depend on your computing cluster
+! num_proc_per_node             = input.output.max_per_node    ## number of processes to use per step per node
+! num_proc_per_node_limit       = 4     ## number of processes to use per step per node for tasks with high i/o (dppp or cp) or memory (eg calibration)
+! max_dppp_threads              = 9     ## number of threads per process for NDPPP
+! error_tolerance               = False ## False = stop if any subband fails, True = keep going
+
+##########################################################
+## Changing these will probably break something.	##
+##########################################################
+
+## global information
+! base_directory                        = input.output.working_directory  
+! job_directory                         = input.output.job_directory      
+! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
+! prefactor_scripts			= {{ prefactor_dir }}/scripts
+
+! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
+! datadi_col = DATA
+! delaycal_phase = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
+! delaycal_amp = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
+
+! rfistrategy			= HBAdefault
+! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
+
+##
+## END CONFIGURATION
+
+
+##########################################################
+## Steps to run.					##
+##########################################################
+
+! substep_clip = clipATeam, ## leave blank for no a-team clipping
+! substep_flag = # aoflagging,  ## turned off by default
+! substep_cleanup = ,cleanup
+
+pipeline.steps = [ setup, image_1asec, finalize ]
+
+pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
+pipeline.steps.image_1asec = [ make_image, createmap_image_i, make_source_list]
+pipeline.steps.finalize = [ make_results_mapfile, move_results]
+
+
+###########################################################################
+
+
+##################################################################################################################
+##														##
+##			BEGIN PIPELINE: DO NOT UPDATE BELOW THIS LINE!						##
+##														##
+##################################################################################################################
+
+## create directories
+
+# create the results directory if needed
+mk_results_dir.control.kind               = plugin
+mk_results_dir.control.type               = makeDirectory
+mk_results_dir.control.directory          = {{ results_directory }}
+
+# create the inspection_directory if needed
+mk_inspect_dir.control.kind               = plugin
+mk_inspect_dir.control.type               = makeDirectory
+mk_inspect_dir.control.directory          = {{ inspection_directory }}
+
+# create the cal_values_directory if needed
+mk_cal_values_dir.control.kind               =  plugin
+mk_cal_values_dir.control.type               =  makeDirectory
+mk_cal_values_dir.control.directory          =  {{ cal_values_directory }}
+
+# create a directory for the ionex files
+mk_ionex_dir.control.kind		  = plugin
+mk_ionex_dir.control.type		  = makeDirectory
+mk_ionex_dir.control.directory		  = {{ ionex_path }}
+
+# generate a mapfile of all the target data
+createmap_target.control.kind             = plugin
+createmap_target.control.type             = createMapfile
+createmap_target.control.method           = mapfile_from_folder
+createmap_target.control.mapfile_dir      = input.output.mapfile_dir
+createmap_target.control.filename         = createmap_target.mapfile
+createmap_target.control.folder           = {{ target_input_path }}
+createmap_target.control.pattern          = {{ target_input_pattern }}
+
+# convert to a mapfile with all subbands in one list
+createmap_target_list.control.kind            =   plugin
+createmap_target_list.control.type            =   createMapfile
+createmap_target_list.control.method          =   mapfile_all_to_one
+createmap_target_list.control.mapfile_dir     =   input.output.mapfile_dir
+createmap_target_list.control.filename        =   combine_data_tar_map.mapfile
+createmap_target_list.control.mapfile_in      =   createmap_target.output.mapfile
+
+cp_data.control.kind            = recipe
+cp_data.control.type            = executable_args
+cp_data.control.executable      = /bin/cp
+cp_data.control.max_per_node    = 1
+cp_data.control.mapfile_in      = createmap_target.output.mapfile
+cp_data.control.inputkey        = file
+cp_data.argument.flags          = [-r,file,.]
+
+#
+# Make the 1'' image.
+#
+# The sorting logic should be on the pipeline / AGLOW side here.
+# We expect 60 SB to make an initial 1'' image to find suitable DDE calibrators.
+make_image.control.kind                     = recipe
+make_image.control.type                     = executable_args
+make_image.control.inplace                  = True
+make_image.control.executable               = {{ wsclean_executable }}
+make_image.control.args_format              = wsclean
+make_image.control.max_per_node             = 1
+make_image.control.error_tolerance          = {{ error_tolerance }}
+make_image.mapfiles_in                      = [cp_data]
+make_image.inputkeys                        = [msfiles]
+make_image.argument.flags                   = [-no-update-model-required, -reorder, -fit-beam, -join-channels, -use-ide, -grid-with-beam, -use-differential-lofar-beam, -multiscale, msfiles]
+make_image.argument.minuv-l                 = 80
+make_image.argument.size                    = "20000 20000"
+make_image.argument.scale                   = 0.4
+make_image.argument.weight                  = "briggs -1.5"
+make_image.argument.weighting-rank-filter   = 3
+make_image.argument.clean-border            = 0.05
+make_image.argument.mgain                   = 0.8
+make_image.argument.data-column             = DATA
+make_image.argument.channels-out            = 6
+make_image.argument.padding                 = 1.25
+make_image.argument.auto-mask               = 3
+make_image.argument.auto-threshold          = 1
+make_image.argument.fit-spectral-pol        = 3
+make_image.argument.pol                     = I
+make_image.argument.name                    = 1asec
+make_image.argument.taper_gaussian          = 1asec
+make_image.argument.beam-size               = 1asec
+make_image.argument.nmiter                  = 10
+make_image.argument.niter                   = 100000
+make_image.argument.idg-mode                = cpu
+make_image.argument.multiscale-scales       = "0,4,10,25,64,160"
+make_image.argument.deconvolution-channels  = 3
+make_image.argument.parallel-reordering     = 6
+make_image.argument.aterm-kernel-size       = 31
+make_image.argument.parallel-deconvolution  = 4096
+
+# Find the image. Adapted from prefactor.
+createmap_image_i.control.kind              =   plugin
+createmap_image_i.control.type              =   addListMapfile
+createmap_image_i.control.hosts             =   [localhost]
+createmap_image_i.control.files             =   [1asec-MFS-image-pb.fits]
+createmap_image_i.control.mapfile_dir       =   input.output.mapfile_dir
+createmap_image_i.control.filename          =   make_image.mapfile
+
+#
+# Run PyBDSF to find sources
+#
+make_source_list.control.type                       = pythonplugin
+make_source_list.control.executable                 = {{ scripts }}/make_source_list.py
+make_source_list.control.error_tolerance            = {{ error_tolerance }}
+make_source_list.control.mapfile_in                 = createmap_image_i.output.mapfile
+make_source_list.control.inputkey                   = imagefile
+make_source_list.control.outputkey                  = catalogfile
+make_source_list.argument.flags                     = [imagefile,catalogfile]
+make_source_list.argument.threshisl                 = 4.0
+make_source_list.argument.threshpix                 = 5.0
+make_source_list.argument.atrous_do                 = False
+make_source_list.argument.rmsbox_bright             = (60,20)
+make_source_list.argument.adaptive_rmsbox           = True
+make_source_list.argument.atrous_jmax               = 4
+make_source_list.argument.compare_dir               = {{ job_directory }}/results/inspection
