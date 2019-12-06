@@ -10,6 +10,7 @@
 ! losoto_directory                     = /opt/lofar/losoto
 ! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
 ! wsclean_executable    = /opt/lofar/wsclean/bin/wsclean
+! dppp_executable    = /opt/lofar/DPPP/bin/DPPP
 ! lofar_directory 			= $LOFARROOT
 
 # ## target data information
@@ -53,6 +54,9 @@
 ! rfistrategy			= HBAdefault
 ! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
 
+#! substep_pybdsf = run_pybdsf,
+! substep_pybdsf = 
+! lotss_catalog = PREFACTOR_SCRATCH_DIR/Input/catalog.csv
 ##
 ## END CONFIGURATION
 
@@ -68,8 +72,8 @@
 pipeline.steps = [ setup, image_1asec, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
-pipeline.steps.image_1asec = [ average_data, make_image, createmap_image_i, make_source_list]
-pipeline.steps.finalize = [ make_results_mapfile, move_results]
+pipeline.steps.split_ddecals = [ {{substep_pybdsf}} find_calibrators, createmap_parsets, split_calibrators]
+pipeline.steps.finalize = [ make_results_mapfile_images, move_results_images, make_results_mapfile_catalog, move_results_catalog]
 
 
 ###########################################################################
@@ -139,85 +143,46 @@ cp_data.control.inputkeys       = [infile,outfile]
 cp_data.argument.flags          = [-r,infile,outfile]
 
 #
-# Make the 1'' image.
+# Find and split out all calibrators
 #
-# The sorting logic should be on the pipeline / AGLOW side here.
-# We expect 60 SB to make an initial 1'' image to find suitable DDE calibrators.
-# Average the data to 4ch/4s per subband.
-average_data.control.kind                   = dppp
-average_data.control.max_per_node           = 1
-average_data.control.error_tolerance        = {{ error_tolerance }}
-average_data.control.mapfile_in             = cp_data.output.mapfile
-average_data.inputkey                       = msfile
-average_data.argument.numthreads            = {{ max_dppp_threads }}
-average_data.argument.msin                  = msfile
-average_data.argument.msin.datacolumn       = DATA
-average_data.argument.msout.overwrite       = True
-average_data.argument.msout.storagemanager  = dysco
-average_data.argument.steps                 = [avg]
-average_data.argument.avg.type              = average
-average_data.argument.avg.timeresolution    = 4
-average_data.argument.avg.freqresolution    = 48.82kHz
+find_calibrators.control.type = pythonplugin
+find_calibrators.control.executable = {{ widefield_dir }}/utils/find_calibrators.py
+find_calibrators.control.max_per_node = 1
+# Mapfile not actually used.
+find_calibrators.control.mapfile_in = createmap_target_list.output.mapfile
+find_calibrators.argument.catalog = {{ lotss_catalog }}
 
-# Run wsclean for a 1 '' image.
-make_image.control.kind                     = recipe
-make_image.control.type                     = executable_args
-make_image.control.inplace                  = True
-make_image.control.executable               = {{ wsclean_executable }}
-make_image.control.args_format              = wsclean
-make_image.control.max_per_node             = 1
-make_image.control.error_tolerance          = {{ error_tolerance }}
-make_image.mapfiles_in                      = [average_data.output.mapfile]
-make_image.inputkeys                        = [msfiles]
-make_image.argument.flags                   = [-no-update-model-required, -reorder, -fit-beam, -join-channels, -use-ide, -grid-with-beam, -use-differential-lofar-beam, -multiscale, msfiles]
-make_image.argument.minuv-l                 = 80
-make_image.argument.size                    = "20000 20000"
-make_image.argument.scale                   = 0.4
-make_image.argument.weight                  = "briggs -1.5"
-make_image.argument.weighting-rank-filter   = 3
-make_image.argument.clean-border            = 0.05
-make_image.argument.mgain                   = 0.8
-make_image.argument.data-column             = DATA
-make_image.argument.channels-out            = 6
-make_image.argument.padding                 = 1.25
-make_image.argument.auto-mask               = 3
-make_image.argument.auto-threshold          = 1
-make_image.argument.fit-spectral-pol        = 3
-make_image.argument.pol                     = I
-make_image.argument.name                    = 1asec
-make_image.argument.taper_gaussian          = 1asec
-make_image.argument.beam-size               = 1asec
-make_image.argument.nmiter                  = 10
-make_image.argument.niter                   = 100000
-make_image.argument.idg-mode                = cpu
-make_image.argument.multiscale-scales       = "0,4,10,25,64,160"
-make_image.argument.deconvolution-channels  = 3
-make_image.argument.parallel-reordering     = 6
-make_image.argument.aterm-kernel-size       = 31
-make_image.argument.parallel-deconvolution  = 4096
+createmap_parsets.control.kind             = plugin
+createmap_parsets.control.type             = createMapfile
+createmap_parsets.control.method           = mapfile_from_folder
+createmap_parsets.control.mapfile_dir      = input.output.mapfile_dir
+createmap_parsets.control.filename         = createmap_parsets.mapfile
+createmap_parsets.control.folder           = {{ working_directory }}
+createmap_parsets.control.pattern          = phaseup*.parset
 
-# Find the image. Adapted from prefactor.
-createmap_image_i.control.kind              =   plugin
-createmap_image_i.control.type              =   addListMapfile
-createmap_image_i.control.hosts             =   [localhost]
-createmap_image_i.control.files             =   [1asec-MFS-image-pb.fits]
-createmap_image_i.control.mapfile_dir       =   input.output.mapfile_dir
-createmap_image_i.control.filename          =   make_image.mapfile
+split_calibrators.control.kind                      = recipe
+split_calibrators.control.type                      = executable_args
+split_calibrators.control.executable                = {{ dppp_executable }}
+split_calibrators.control.max_per_node              = {{ num_proc_per_node_limit }}
+split_calibrators.control.error_tolerance           = {{ error_tolerance }}
+split_calibrators.control.mapfiles_in               = [createmap_target_list.output.mapfile, createmap_parsets.output.mapfile]
+split_calibrators.control.inputkeys                 = [input_files, parset]
+split_calibrators.argument.flags                    = [input_files, parset, numthreads={{ max_dppp_threads }}]
 
-#
-# Run PyBDSF to find sources
-#
-make_source_list.control.type                       = pythonplugin
-make_source_list.control.executable                 = {{ scripts }}/make_source_list.py
-make_source_list.control.error_tolerance            = {{ error_tolerance }}
-make_source_list.control.mapfile_in                 = createmap_image_i.output.mapfile
-make_source_list.control.inputkey                   = imagefile
-make_source_list.control.outputkey                  = catalogfile
-make_source_list.argument.flags                     = [imagefile,catalogfile]
-make_source_list.argument.threshisl                 = 4.0
-make_source_list.argument.threshpix                 = 5.0
-make_source_list.argument.atrous_do                 = False
-make_source_list.argument.rmsbox_bright             = (60,20)
-make_source_list.argument.adaptive_rmsbox           = True
-make_source_list.argument.atrous_jmax               = 4
-make_source_list.argument.compare_dir               = {{ job_directory }}/results/inspection
+# Move the corrected datasets to the results folder.
+make_results_mapfile.control.kind                        =   plugin
+make_results_mapfile.control.type                        =   makeResultsMapfile
+make_results_mapfile.control.mapfile_dir                 =   input.output.mapfile_dir
+make_results_mapfile.control.filename                    =   make_results_mapfile.mapfile
+make_results_mapfile.control.mapfile_in                  =   split_calibrators.output.mapfile
+make_results_mapfile.control.target_dir                  =   {{ results_directory }}
+make_results_mapfile.control.make_target_dir             =   False
+
+# Move the results to where we want them
+move_results.control.kind                                =   recipe
+move_results.control.type                                =   executable_args
+move_results.control.executable                          =   /bin/mv
+move_results.control.max_per_node                        =   {{ num_proc_per_node_limit }}
+move_results.control.mapfiles_in                         =   [make_results_mapfile.output.mapfile,make_results_mapfile.output.mapfile]
+move_results.control.inputkeys                           =   [source,destination]
+move_results.control.arguments                           =   [source,destination]
