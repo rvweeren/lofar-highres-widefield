@@ -69,11 +69,11 @@
 ! substep_flag = # aoflagging,  ## turned off by default
 ! substep_cleanup = ,cleanup
 
-pipeline.steps = [ setup, image_1asec, finalize ]
+pipeline.steps = [ setup, split_ddecals, finalize ]
 
-pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_target_list, cp_data]
-pipeline.steps.split_ddecals = [ {{substep_pybdsf}} find_calibrators, createmap_parsets, split_calibrators]
-pipeline.steps.finalize = [ make_results_mapfile_images, move_results_images, make_results_mapfile_catalog, move_results_catalog]
+pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list, cp_data]
+pipeline.steps.split_ddecals = [ {{ substep_pybdsf }} find_calibrators, createmap_parsets, split_calibrators]
+pipeline.steps.finalize = [ make_results_mapfile, move_results, make_results_mapfile_catalog, move_results_catalog]
 
 
 ###########################################################################
@@ -145,12 +145,18 @@ cp_data.argument.flags          = [-r,infile,outfile]
 #
 # Find and split out all calibrators
 #
-find_calibrators.control.type = pythonplugin
+find_calibrators.control.kind = recipe
+find_calibrators.control.type = executable_args
 find_calibrators.control.executable = {{ widefield_dir }}/utils/find_calibrators.py
-find_calibrators.control.max_per_node = 1
+find_calibrators.control.max_per_node = 4
 # Mapfile not actually used.
 find_calibrators.control.mapfile_in = createmap_target_list.output.mapfile
+find_calibrators.control.skip_infile = True
 find_calibrators.argument.catalog = {{ lotss_catalog }}
+find_calibrators.argument.solutions_phase = {{ delaycal_phase }}
+find_calibrators.arugment.solset_phase    = sol001
+find_calibrators.argument.solutions_amp  = {{ delaycal_amp }}
+find_calibrators.arugment.solset_amp      = sol001
 
 createmap_parsets.control.kind             = plugin
 createmap_parsets.control.type             = createMapfile
@@ -158,16 +164,19 @@ createmap_parsets.control.method           = mapfile_from_folder
 createmap_parsets.control.mapfile_dir      = input.output.mapfile_dir
 createmap_parsets.control.filename         = createmap_parsets.mapfile
 createmap_parsets.control.folder           = {{ working_directory }}
-createmap_parsets.control.pattern          = phaseup*.parset
+createmap_parsets.control.pattern          = shift*.parset
 
 split_calibrators.control.kind                      = recipe
 split_calibrators.control.type                      = executable_args
 split_calibrators.control.executable                = {{ dppp_executable }}
 split_calibrators.control.max_per_node              = {{ num_proc_per_node_limit }}
 split_calibrators.control.error_tolerance           = {{ error_tolerance }}
-split_calibrators.control.mapfiles_in               = [createmap_target_list.output.mapfile, createmap_parsets.output.mapfile]
-split_calibrators.control.inputkeys                 = [input_files, parset]
-split_calibrators.argument.flags                    = [input_files, parset, numthreads={{ max_dppp_threads }}]
+split_calibrators.control.mapfiles_in               = [createmap_target_list.output.mapfile,createmap_parsets.output.mapfile]
+split_calibrators.control.inputkeys                 = [input_files,parset]
+split_calibrators.control.args_format               = lofar
+split_calibrators.argument.flags                    = [parset]
+split_calibrators.argument.msin                     = input_files
+split_calibrators.argument.numthreads               = {{ max_dppp_threads }}
 
 # Move the corrected datasets to the results folder.
 make_results_mapfile.control.kind                        =   plugin
