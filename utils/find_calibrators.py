@@ -151,7 +151,7 @@ if __name__ == '__main__':
     candidates = find_candidates(args.catalog)
     candidates.write('dde_calibrators.csv', format='ascii.csv')
     if ast.literal_eval(args.writepset):
-        Nchunks = (len(candidates) // 10) + 1
+        Nchunks = (len(candidates) // 20) + 1
         for i in xrange(Nchunks):
             candidate_chunk = candidates[10*i:10*(i+1)]
             if args.sols_phase:
