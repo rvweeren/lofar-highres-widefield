@@ -30,13 +30,17 @@ def find_candidates(cat, fluxcut=25e-3):
     '''
     tab = ascii.read(cat)
     sub_tab = tab[tab['Peak_flux'] > fluxcut]
+    sub_tab.rename_column('RA', 'LOTSS_RA')
+    sub_tab.rename_column('DEC', 'LOTSS_DEC')
     #return candidates
 
     # In case of multiple components of a single source being found, calculate the mean position.
     candidates = Table(names=['Source_id', 'RA', 'DEC'])
+    candidates.rename_column('RA', 'LOTSS_RA')
+    candidates.rename_column('DEC', 'LOTSS_DEC')
 
     # Make an (N,2) array of directions and compute the distances between points.
-    pos = np.stack((list(sub_tab['RA']), list(sub_tab['DEC'])), axis=1)
+    pos = np.stack((list(sub_tab['LOTSS_RA']), list(sub_tab['LOTSS_DEC'])), axis=1)
     distances = pdist(pos, 'euclidean')
 
     # Cluster components based on the distance between them.
@@ -50,12 +54,12 @@ def find_candidates(cat, fluxcut=25e-3):
         comps = sub_tab[idx]
         if len(comps) == 1:
             # Nothing needs to merge with this direction.
-            candidates.add_row((sub_tab['Source_id'][i], sub_tab['RA'][i], sub_tab['DEC'][i]))
+            candidates.add_row((sub_tab['Source_id'][i], sub_tab['LOTSS_RA'][i], sub_tab['LOTSS_DEC'][i]))
             continue
         else:
-            ra_mean = np.mean(sub_tab['RA'][idx])
-            dec_mean = np.mean(sub_tab['DEC'][idx])
-            if (ra_mean not in candidates['RA']) and (dec_mean not in candidates['DEC']):
+            ra_mean = np.mean(sub_tab['LOTSS_RA'][idx])
+            dec_mean = np.mean(sub_tab['LOTSS_DEC'][idx])
+            if (ra_mean not in candidates['LOTSS_RA']) and (dec_mean not in candidates['LOTSS_DEC']):
                 candidates.add_row((sub_tab['Source_id'][i], ra_mean, dec_mean))
             else:
                 print('Direction {:d} has been merged already.\n'.format(sub_tab['Source_id'][i]))
@@ -101,11 +105,13 @@ avg1.freqresolution = 48.82kHz
         parset += '''apply1.type = applycal
 apply1.parmdb = {h5phase:s}
 apply1.solset = {h5phasess:s}
+apply1.correction = phase000
 '''.format(h5phase=sols_phase, h5phasess=solset_phase)
     if sols_amp is not None:
         parset += '''apply2.type = applycal
 apply2.parmdb = {h5amp:s}
 apply2.solset = {h5ampss:s}
+apply2.correction = amplitude000
 '''.format(h5amp=sols_amp, h5ampss=solset_amp)
     parset += '''adder.type=stationadder
 adder.stations={ST001:'CS*'}
@@ -126,30 +132,34 @@ msout.overwrite = True
     parset += 'shift.phasecenter=[' + ','.join(list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), candidates['RA', 'DEC']))) + ']\n'
     return parset
 
-import argparse
+if __name__ == '__main__':
+    import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--catalog', dest='catalog', help='Catalog to select candidate calibrators from.')
-parser.add_argument('--solutions_phase', dest='sols_phase', help='Phase solutions on infield calibrator.', default='')
-parser.add_argument('--solset_phase', dest='ss_phase', help='Solset for phase solutions on infield calibrator.', default='sol001')
-parser.add_argument('--solutions_amp', dest='sols_amp', help='Amplitude solutions on infield calibrator.', default='')
-parser.add_argument('--solset_amp', dest='ss_amp', help='Solset for amplitude solutions on infield calibrator.', default='sol001')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--catalog', dest='catalog', help='Catalog to select candidate calibrators from.')
+    parser.add_argument('--write-parsets', dest='writepset', help='Write out parsets to do the splitting.', default=False, type=bool)
+    parser.add_argument('--solutions_phase', dest='sols_phase', help='Phase solutions on infield calibrator.', default='')
+    parser.add_argument('--solset_phase', dest='ss_phase', help='Solset for phase solutions on infield calibrator.', default='sol001')
+    parser.add_argument('--solutions_amp', dest='sols_amp', help='Amplitude solutions on infield calibrator.', default='')
+    parser.add_argument('--solset_amp', dest='ss_amp', help='Solset for amplitude solutions on infield calibrator.', default='sol001')
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-if (args.sols_amp) and (not args.sols_phase):
-    parser.error('Cannot specify --solutions_amp without specifying --solutions_phase.')
+    if (args.sols_amp) and (not args.sols_phase):
+        parser.error('Cannot specify --solutions_amp without specifying --solutions_phase.')
 
-candidates = find_candidates(args.catalog)
-Nchunks = (len(candidates) // 10) + 1
-for i in xrange(Nchunks):
-    candidate_chunk = candidates[10*i:10*(i+1)]
-    if args.sols_phase:
-        parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase)
-        if args.sols_amp:
-            parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase, sols_amp=args.sols_amp, solset_amp=args.ss_amp)
-    else:
-        parset = make_parset(candidate_chunk)
+    candidates = find_candidates(args.catalog)
+    candidates.write('dde_calibrators.csv', format='ascii.csv')
+    if ast.literal_eval(args.writepset):
+        Nchunks = (len(candidates) // 10) + 1
+        for i in xrange(Nchunks):
+            candidate_chunk = candidates[10*i:10*(i+1)]
+            if args.sols_phase:
+                parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase)
+                if args.sols_amp:
+                    parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase, sols_amp=args.sols_amp, solset_amp=args.ss_amp)
+            else:
+                parset = make_parset(candidate_chunk)
 
-    with open('shift_to_calibrators_{:01d}.parset'.format(i), 'w') as f:
-        f.write(parset)
+            with open('shift_to_calibrators_{:01d}.parset'.format(i), 'w') as f:
+                f.write(parset)
