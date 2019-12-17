@@ -1,4 +1,7 @@
 # A LOFAR Long Baseline Widefield Imaging Pipeline
+
+**The pipeline is currently being rewritten in a generic pipeline format and a more parallel fashion oriented on running on clusters this master branch is not maintained at the moment.**
+
 This is an imaging pipeline to produce high quality high resolution widefield images of LOFAR observations including the international stations. It aims to be a pipeline similar as what the ddf-pipeline is for the Dutch LOFAR, and uses DDFacet, DP3 and WSClean.
 
 The end result of the pipeline is currently a 1'' map that is direction-independently calibrated. As input, it requires a dataset, a square DS9 region centered on the pointing center, the corresponding LoTSS reduction and solutions towards an infield long-baseline calibrator. Given this, the pipeline will then:
