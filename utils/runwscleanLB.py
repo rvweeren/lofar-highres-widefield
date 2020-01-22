@@ -17,7 +17,6 @@ import pickle
 import logging
 import aplpy
 import fnmatch
-import getpass
 
 from lofar.stationresponse import stationresponse
 
@@ -95,7 +94,6 @@ def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=Tr
 
 #losotolofarbeam('P214+55_PSZ2G098.44+56.59.dysco.sub.shift.avg.weights.ms.archive_templatejones.h5', 'amplitude000', 'P214+55_PSZ2G098.44+56.59.dysco.sub.shift.avg.weights.ms.archive', inverse=False, useElementResponse=False, useArrayFactor=True, useChanFreq=True)
 
-#sys.exit()
 
 def cleanup(mslist):
     
@@ -368,9 +366,10 @@ def determinesolints(mslist, pixsize, imsize, channelsout, niter, robust, TEC, l
 
       for ms in mslist:
 
-          imageout =  'solintimage' + ms.split('.ms')[0] 
-          makeimage([ms], imageout, pixsize, imsize, channelsout, np.int(niter/2), robust, multiscale=multiscale, predict=False, uvminim=args['uvminim'])
-          if not longbaseline: # remove the if not, so it does compute auto if solint cal. is stable         
+          if not longbaseline: # remove the if not, so it does compute auto if solint cal. is stable   
+            imageout =  'solintimage' + ms.split('.ms')[0] 
+            makeimage([ms], imageout, pixsize, imsize, channelsout, np.int(niter/2), robust, multiscale=multiscale, predict=False, uvminim=args['uvminim'])
+  
             csf = determine_compactsource_flux(imageout + '-MFS-image.fits') 
             nchan_phase, solint_phase, solint_ap = calculate_solintnchan(csf/declf)
           
@@ -421,7 +420,10 @@ def determinesolints(mslist, pixsize, imsize, channelsout, niter, robust, TEC, l
 
    return nchan_phase_F, solint_phase_F, solint_ap_F, nchan_ap_F
 
-def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robust, TEC, longbaseline, multiscale=False,lb_nchan_phase=5,lb_nchan_ap=10,lb_solint_phase=1,lb_solint_ap=None, uvdismod=800e3):
+def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robust, TEC, longbaseline, \
+                              multiscale=False,lb_nchan_phase=5,lb_nchan_ap=10,lb_solint_phase=1,\
+                              lb_solint_ap=None, uvdismod=800e3, solintphase_sf=1.0, modelcolumn='MODEL_DATA',\
+                              redo=False):
    """
    determine the solution time and frequency intervals based on the amount of compact source flux
    """
@@ -431,7 +433,7 @@ def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robus
        sys.exit()
    
    if os.path.isfile('nchan_phase.p') and os.path.isfile('solint_phase.p') and \
-      os.path.isfile('solint_ap.p') and os.path.isfile('nchan_ap.p'):
+      os.path.isfile('solint_ap.p') and os.path.isfile('nchan_ap.p') and not redo:
     
       f = open('nchan_phase.p', 'r') 
       nchan_phase_F = pickle.load(f)        
@@ -461,15 +463,15 @@ def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robus
       nchan_ap_F     = [] 
 
       for ms in mslist:
-
-          imageout =  'solintimage' + ms.split('.ms')[0] 
-          makeimage([ms], imageout, pixsize, imsize, channelsout, np.int(niter/2), robust, multiscale=multiscale, predict=True, uvminim=args['uvminim'])
+          if not redo:
+            imageout =  'solintimage' + ms.split('.ms')[0] 
+            makeimage([ms], imageout, pixsize, imsize, channelsout, np.int(niter/2), robust, multiscale=multiscale, predict=True, uvminim=args['uvminim'])
           
-          t = pt.taql('SELECT MODEL_DATA,UVW,TIME,FLAG FROM ' + ms + ' WHERE SQRT(SUMSQR(UVW[:2])) > '+ str(uvdismod) )
-          model = np.abs(t.getcol('MODEL_DATA'))
+          t = pt.taql('SELECT ' + modelcolumn + ',UVW,TIME,FLAG FROM ' + ms + ' WHERE SQRT(SUMSQR(UVW[:2])) > '+ str(uvdismod) )
+          model = np.abs(t.getcol(modelcolumn))
           flags = t.getcol('FLAG')
           model = np.ma.masked_array(model, flags)
-          flux  = np.ma.mean(model)
+          flux  = np.ma.mean((model[:,:,0] + model[:,:,3])*0.5) # average XX and YY (ignore XY and YX, they are zero, or nan)
           time  = np.unique(t.getcol('TIME'))
           tint  = np.abs(time[1]-time[0])
           print(tint)
@@ -479,8 +481,8 @@ def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robus
           t.close()
   
           
-          solint_phase = np.rint(np.sqrt(100e-3/(flux/declf)) * (64./tint) )
-          print  np.sqrt(100e-3/(flux/declf)) * (64./tint) 
+          solint_phase = np.rint(solintphase_sf*np.sqrt(100e-3/(flux/declf)) * (64./tint) )
+          print  solintphase_sf*np.sqrt(100e-3/(flux/declf)) * (64./tint) 
           print('Flux in model', flux, 'Jy')
           print('UV-selection to compute model flux', str(uvdismod/1e3), 'km')
           if solint_phase < 1:
@@ -873,6 +875,22 @@ def beamcor(ms):
     os.system(taql + " 'update " + ms + " set DATA=CORRECTED_DATA'")
     return
 
+def beamcormodel(ms):
+    """
+    create MODEL_DATA_BEAMCOR where we store beam corrupted model data
+    """   
+    H5name = ms + '_templatejones.h5'   
+    
+    cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=MODEL_DATA msout=. '
+    cmd += 'msout.datacolumn=MODEL_DATA_BEAMCOR steps=[ac1,ac2] msout.storagemanager=dysco '
+    cmd += 'ac1.parmdb='+H5name + ' ac2.parmdb='+H5name + ' '
+    cmd += 'ac1.type=applycal ac2.type=applycal '
+    cmd += 'ac1.correction=phase000 ac2.correction=amplitude000 ac2.updateweights=False '
+    cmd += 'ac1.invert=False ac2.invert=False ' # Here we corrupt with the beam !
+    print 'DPPP applycal:', cmd
+    os.system(cmd)
+   
+    return
 
 def findrms(mIn,maskSup=1e-7):
     """
@@ -933,7 +951,7 @@ def getimsize(boxfile, cellsize=1.5):
 
 def smoothsols(parmdb, ms, longbaseline):
     
-    username = getpass.getuser()
+    username = os.getlogin()
     if username == 'rvweerenold':
        losoto = '/home/rvweeren/.local/bin/losoto'
     else:
@@ -1353,7 +1371,7 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
     
     
     
-    username = getpass.getuser()
+    username = os.getlogin()
     if username == 'rvweerenold':
        wsclean = '/net/lofar1/data1/rvweeren/software/wsclean-code-2.6oct12/wsclean/build/wsclean'
     else:
@@ -1364,7 +1382,7 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
     #if not deepmultiscale:
     cmd += '-no-update-model-required -minuv-l ' + str(uvminim) + ' '
     cmd += '-size ' + imsize + ' ' + imsize + ' -reorder '
-    cmd += '-weight briggs ' + robust + ' -weighting-rank-filter 3 -clean-border 1 '
+    cmd += '-weight briggs ' + robust + ' -weighting-rank-filter 3 -clean-border 1 -parallel-reordering 4 '
     cmd += '-mgain 0.8 -fit-beam -data-column ' + imcol +' -join-channels -channels-out '
     cmd += channelsout + ' -padding 1.4 -auto-mask 2.5 -auto-threshold 1.0 '
     #cmd += '-parallel-deconvolution ' + str(np.int(imsize)/2) + ' ' 
@@ -1474,7 +1492,7 @@ def runDPPPskymodel(ms, parmdb, skymodel, solint_phaseonly=2, nchan_phase=5,solt
  
 def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, soltype, \
              preapplyphase, longbaseline,uvmin=0, TEC=False,\
-             FOVedge=False, smoothcal=True, puretec=False):
+             SMconstraint=0.0, smoothcal=True, puretec=False):
 
     # figure out which weight_spectrum column to use
     t = pt.table(ms)
@@ -1489,7 +1507,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
     losotoparset_tecandphase = create_losoto_tecandphaseparset(ms)
     losotoparset_tec = create_losoto_tecparset(ms)
 
-    username = getpass.getuser()
+    username = os.getlogin()
     if username == 'rvweerenold':
        losoto = '/home/rvweeren/.local/bin/losoto'
     else:
@@ -1522,6 +1540,8 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
         if TEC == False:
            cmd += 'ddecal.mode=scalarphase ' # scalarphase, phaseonly, complexgain, tec, tecandphase
            cmd += 'ddecal.tolerance=1.e-5 '
+           if SMconstraint > 0.0:
+             cmd += 'ddecal.smoothnessconstraint=' + str(SMconstraint*1e6) + ' '      
         if TEC == True:
            if puretec: 
              cmd += 'ddecal.mode=tec ' 
@@ -1544,14 +1564,16 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
         cmd += 'ddecal.nchan=' + str(nchan_ap) + ' '
         cmd += 'ddecal.h5parm=' + parmdb + ' '
         cmd += 'ddecal.tolerance=1.e-5 '
-        if FOVedge:
-          cmd += 'ddecal.smoothnessconstraint=8e6 '
+        if SMconstraint > 0.0:
+          cmd += 'ddecal.smoothnessconstraint=' + str(SMconstraint*1e6) + ' ' 
  
     # CASE III      
-    if soltype == 'scalarphase' and preapplyphase == False:
+    if soltype == 'scalarphase' and preapplyphase == False:   
         if TEC == False:
            cmd += 'ddecal.mode=scalarphase ' # scalarphase, phaseonly
            cmd += 'ddecal.tolerance=1.e-5 '
+           if SMconstraint > 0.0:
+            cmd += 'ddecal.smoothnessconstraint=' + str(SMconstraint*1e6) + ' '            
         if TEC == True:
            if puretec:
              cmd += 'ddecal.mode=tec '  
@@ -1612,8 +1634,8 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
         cmd += 'ddecal.mode=' + soltype + ' ' # scalarphase, phaseonly, complexgain, tec, tecandphase
         cmd += 'ddecal.h5parm=' + parmdb + ' ' 
         cmd += 'ddecal.solint=' + str(solint_ap) + ' ' 
-        if FOVedge:
-          cmd += 'ddecal.smoothnessconstraint=8e6 '
+        if SMconstraint > 0.0:
+          cmd += 'ddecal.smoothnessconstraint=' + str(SMconstraint*1e6) + ' ' 
 
         if uvmin != 0:
            cmd += 'ddecal.uvlambdamin=' + str(uvmin) + ' '
@@ -1664,17 +1686,13 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
     #  CASE IV      
     if (soltype == 'complexgain' or soltype == 'rotation+diagonal') and (preapplyphase == True):
       flagbadamps(parmdb)
-      if FOVedge == True:
-        flaglowamps(parmdb,lowampval=0.1,longbaseline=longbaseline)
-        flaghighgamps(parmdb, highampval=10.,longbaseline=longbaseline)  
+
+      if longbaseline:
+        flaglowamps(parmdb,lowampval=0.15,longbaseline=longbaseline)
+        flaghighgamps(parmdb, highampval=2.5,longbaseline=longbaseline)   
       else:
-        
-        if longbaseline:
-          flaglowamps(parmdb,lowampval=0.05,longbaseline=longbaseline)
-          flaghighgamps(parmdb, highampval=10.,longbaseline=longbaseline)   
-        else:
-          flaglowamps(parmdb,lowampval=0.1,longbaseline=longbaseline)
-          flaghighgamps(parmdb, highampval=10.,longbaseline=longbaseline)   
+        flaglowamps(parmdb,lowampval=0.1,longbaseline=longbaseline)
+        flaghighgamps(parmdb, highampval=10.,longbaseline=longbaseline)   
       
       # FLAG/SMOOTH solutions
       removenans(parmdb, 'amplitude000')
@@ -1696,14 +1714,12 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
 # ---- INPUT -----#
 
 
-switchtogaincycle = 3 # number of phase-only selfcal cycles
-
 
 
 
 
 parser = argparse.ArgumentParser(description='Calibrate and image DR2 cutout')
-parser.add_argument('-b','--boxfile', help='boxfile, required argument', type=str)
+parser.add_argument('-b','--boxfile', help='boxfile', type=str)
 parser.add_argument('--fitsmask', help='fitsmask for deconvolution, if not provided use automasking', type=str)
 parser.add_argument('--H5sols', help='prefix name for H5 solution file, default=solsgrid', default='solsgrid', type=str)
 parser.add_argument('--imsize', help='image size, required if boxfile is not used', type=int)
@@ -1714,19 +1730,24 @@ parser.add_argument('-u', '--uvmin', help='inner uv-cut for calibration in lambd
 parser.add_argument('--uvminim', help='inner uv-cut for imaging in lambda, default=80', default=80., type=float)
 parser.add_argument('--no-tec', help='do not use TEC fitting', action='store_false')
 parser.add_argument('--pure-tec', help='use TEC, mode="tec", instead of mode="tecandphase"', action='store_true')
-parser.add_argument('--solve-dfr', help='use TEC, mode="tec", instead of mode="tecandphase"', action='store_true')
+parser.add_argument('--solve-dfr', help='slow solve for differential FR, mode="rotation+diagonal"', action='store_true')
 parser.add_argument('--multiscale', help='use multiscale deconvolution, not recommended', action='store_true')
 parser.add_argument('--pixelscale', help='pixels size in arcsec, deafult=1.5', default=1.5, type=float)
 parser.add_argument('--idg', help='use the Image Domain gridder', action='store_true')
 parser.add_argument('--longbaseline', help='optimisze settings for long baselines', action='store_true')
+parser.add_argument('--phasecycles', help='number of phase-only/tec selfcal cycles before ap solve, default=3', default=3, type=int)
+parser.add_argument('--smoothnessconstraint', help='Kernel size in MHz, default=0. When unequal to 0, will constrain the solutions to be smooth over frequency', default=0.0, type=float)
+
+
+
 
 parser.add_argument('--lb-nchan-phase', help='nchan_phase (for longbaseline data only), deafult=5', default=5,type=int)
 parser.add_argument('--lb-nchan-ap', help='nchan_phase (for longbaseline data only), default=10', default=10,type=int)
 parser.add_argument('--lb-solint-phase', help='solint_phase (for longbaseline data only), default=1', default=1,type=int)
 parser.add_argument('--lb-solint-ap', help='nchan_phase (for longbaseline data only), default calculate automatically',type=int)
 parser.add_argument('--usemodeldataforsolints', help='determine solints from MODEL_DATA', action='store_true')
+parser.add_argument('--lb-solintphase-sc', help='multiply solint found for tec/phase from the option --usemodeldataforsolints with this value, deafult=1.0', default=1.0, type=float)
 parser.add_argument('--skymodel', help='skymodel for first phase-only calibration (for longbaseline data only)', type=str)
-
 parser.add_argument('--no-beamcor', help='do not correct the visilbities for the array factor', action='store_false')
 parser.add_argument('-i','--imagename', help='imagename, default=image', default='image', type=str)
 parser.add_argument('--start', help='start selfcal cycle at this iteration, default=0', default=0, type=int)
@@ -1734,6 +1755,10 @@ parser.add_argument('--stop', help='stop selfcal cycle at this iteration, defaul
 parser.add_argument('--no-smoothcal', help='median smooth amplitudes', action='store_false')
 parser.add_argument('--maskthreshold', help='threshold for MakeMask.py, default=5', default=5, type=int)
 parser.add_argument('ms', nargs='*', help='msfile(s)')  
+
+
+
+
 
 args = vars(parser.parse_args())
 #print args
@@ -1774,7 +1799,10 @@ if args['imsize'] != None:
 TEC = args['no_tec']
 idg = args['idg']
 multiscale = args['multiscale']
-imageout  = args['imagename'] + '_'
+if args['imagename'] != 'image':
+    imageout  = args['imagename'] + '_'
+else:
+    imageout = mslist[0] + '_'
 dobeamcor = args['no_beamcor']
 if args['fitsmask'] != None:
   fitsmask = args['fitsmask']
@@ -1814,7 +1842,7 @@ logging.info('Output file will be:       ' + outtarname)
 
 
 
-username = getpass.getuser()
+username = os.getlogin()
 if username == 'rvweerenold':
   makemask = '/net/para10/data1/shimwell/software/killmsddf/new-install/DDFacet/SkyModel/MakeMask.py'
 else:
@@ -1831,6 +1859,14 @@ if beamcor and idg:
   print 'beamcor=True and IDG=True is not possible'
   sys.exit()
 
+if args['start'] == 0:
+  os.system('rm -f nchan_phase.p') 
+  os.system('rm -f nchan_ap.p') 
+  os.system('rm -f solint_phase.p') 
+  os.system('rm -f solint_ap.p') 
+
+
+
 
 deepmultiscale = False
 
@@ -1841,7 +1877,8 @@ if args['usemodeldataforsolints']:
                                               np.int(niter), robust, TEC, longbaseline, \
                                               lb_nchan_phase=args['lb_nchan_phase'], \
                                               lb_nchan_ap=args['lb_nchan_ap'], lb_solint_phase=args['lb_solint_phase'],\
-                                              lb_solint_ap=args['lb_solint_ap'],multiscale=multiscale)
+                                              lb_solint_ap=args['lb_solint_ap'],multiscale=multiscale, \
+                                              solintphase_sf=args['lb_solintphase_sc'])
 
 else:
   nchan_phase,solint_phase,solint_ap,nchan_ap = determinesolints(mslist, \
@@ -1879,7 +1916,6 @@ for i in range(args['start'],args['stop']):
   #if i>= 6 and not multiscale:
   #    deepmultiscale=True
 
-
   # IMAGE
   makeimage(mslist, imageout + str(i), pixsize, imsize, channelsout, np.int(niter), robust, uvtaper=False, multiscale=multiscale, idg=idg, fitsmask=fitsmask, deepmultiscale=deepmultiscale,uvminim=args['uvminim'])
   
@@ -1891,25 +1927,38 @@ for i in range(args['start'],args['stop']):
     plotimage(imageout + str(i) +'-MFS-image.fits',imageout + str(i) + '.png' , \
               mask=fitsmask, rmsnoiseimage=imageout + str(0) +'-MFS-image.fits')
 
+  # create MODEL_DATA_BEAMCOR corrupted by the beam, to redetermine solints if requested
+  if (i >= 1) and (i <= args['phasecycles']) and (args['usemodeldataforsolints']):
+    print 'Now recomputing solints .... '
+    for ms in mslist:
+      beamcormodel(ms)
+    nchan_phase,solint_phase,solint_ap,nchan_ap = determinesolintsMODELDATA(mslist, \
+                                              pixsize, imsize, channelsout, \
+                                              np.int(niter), robust, TEC, longbaseline, \
+                                              lb_nchan_phase=args['lb_nchan_phase'], \
+                                              lb_nchan_ap=args['lb_nchan_ap'], lb_solint_phase=args['lb_solint_phase'],\
+                                              lb_solint_ap=args['lb_solint_ap'],multiscale=multiscale, \
+                                              solintphase_sf=args['lb_solintphase_sc'], \
+                                              modelcolumn='MODEL_DATA_BEAMCOR', redo=True)
 
   # SOLVE
   for msnumber, ms in enumerate(mslist):
-    if i < switchtogaincycle:
+    if i < args['phasecycles']:
       runDPPP(ms, np.int(solint_ap[msnumber]), np.int(solint_phase[msnumber]), \
                np.int(nchan_phase[msnumber]), np.int(nchan_ap[msnumber]), \
-               ms + parmdb + str(i) + '.h5' ,'scalarphase', False, longbaseline, uvmin=uvmin, TEC=TEC, FOVedge=False, puretec=args['pure_tec'])
+               ms + parmdb + str(i) + '.h5' ,'scalarphase', False, longbaseline, uvmin=uvmin, TEC=TEC, SMconstraint=args['smoothnessconstraint'], puretec=args['pure_tec'])
     else:
       if args['solve_dfr'] == True:
         runDPPP(ms, np.int(solint_ap[msnumber]), np.int(solint_phase[msnumber]), \
                np.int(nchan_phase[msnumber]), np.int(nchan_ap[msnumber]), \
-               ms + parmdb + str(i) + '.h5'  ,'rotation+diagonal', True, longbaseline, uvmin=uvmin, TEC=TEC, FOVedge=False, smoothcal=args['no_smoothcal'], puretec=args['pure_tec'])          
+               ms + parmdb + str(i) + '.h5'  ,'rotation+diagonal', True, longbaseline, uvmin=uvmin, TEC=TEC, SMconstraint=args['smoothnessconstraint'], smoothcal=args['no_smoothcal'], puretec=args['pure_tec'])          
       else:
         runDPPP(ms, np.int(solint_ap[msnumber]), np.int(solint_phase[msnumber]), \
                np.int(nchan_phase[msnumber]), np.int(nchan_ap[msnumber]), \
-               ms + parmdb + str(i) + '.h5'  ,'complexgain', True, longbaseline, uvmin=uvmin, TEC=TEC, FOVedge=False, smoothcal=args['no_smoothcal'], puretec=args['pure_tec'])
+               ms + parmdb + str(i) + '.h5'  ,'complexgain', True, longbaseline, uvmin=uvmin, TEC=TEC, SMconstraint=args['smoothnessconstraint'], smoothcal=args['no_smoothcal'], puretec=args['pure_tec'])
 
   # NORMALIZE GLOBAL GAIN (done in log-space)
-  if i >= switchtogaincycle:
+  if i >= args['phasecycles']:
      print 'Doing global gain normalization'  
      parmdblist = []  
      for msnumber, ms in enumerate(mslist):
@@ -1918,7 +1967,7 @@ for i in range(args['start'],args['stop']):
 
   # APPLYCAL
   for msnumber, ms in enumerate(mslist):
-    if i < switchtogaincycle:
+    if i < args['phasecycles']:
       applycal(ms, ms + parmdb + str(i) +'.h5' ,'scalarphase', False, TEC=TEC, puretec=args['pure_tec'])
     else:
       applycal(ms, ms + parmdb + str(i) +'.h5' ,'complexgain', True, TEC=TEC, rotation=args['solve_dfr'], puretec=args['pure_tec'])   
@@ -1935,8 +1984,8 @@ for i in range(args['start'],args['stop']):
   
   # CUT FLAGGED DATA FROM MS AT START AND END
   if TEC: # does not work for phaseonly sols
-    if (i == 0) or (i == switchtogaincycle) or (i == switchtogaincycle + 1) or (i == switchtogaincycle + 2) \
-      or (i == switchtogaincycle + 3) or (i == switchtogaincycle + 4):
+    if (i == 0) or (i == args['phasecycles']) or (i == args['phasecycles'] + 1) or (i == args['phasecycles'] + 2) \
+      or (i == args['phasecycles'] + 3) or (i == args['phasecycles'] + 4):
        for msnumber, ms in enumerate(mslist):  
          flagms_startend(ms, 'phaseonly' + ms + parmdb + str(i) + '.h5', np.int(solint_phase[msnumber]))
   
