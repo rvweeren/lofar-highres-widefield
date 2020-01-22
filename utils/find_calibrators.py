@@ -65,7 +65,7 @@ def find_candidates(cat, fluxcut=25e-3):
                 print('Direction {:d} has been merged already.\n'.format(sub_tab['Source_id'][i]))
     return candidates
     
-def make_parset(candidates, sols_phase=None, solset_phase='sol000', sols_amp=None, solset_amp='sol000'):
+def make_parset(candidates, sols_phase=None, solset_phase='sol000', sols_amp=None, solset_amp='sol000', prefix=''):
     ''' Create a DPPP ready parset for phaseshifting towards the sources.
 
     Args:
@@ -74,6 +74,7 @@ def make_parset(candidates, sols_phase=None, solset_phase='sol000', sols_amp=Non
         solset_phase (str): name of the solset from which to take phase solutions. Default is `sol000`.
         sols_amp (str): path to the h5parm containing ampliutde solutions of the infield calibrator.
         solset_amp (str): name of the solset from which to take amplitude solutions. Default is `sol000`.
+        prefix (str): prefix to prepend to spit out measurement sets. Default is an empty string.
 
     Returns:
         parset (str): a fully formatted parset ready to be fed into DPPP.
@@ -128,8 +129,8 @@ averager.timeresolution = 60
 msout.overwrite = True
 
 '''
-    parset += 'msout.name=[' + ','.join(list(map(lambda s: 'P{:d}.ms'.format(int(s)), candidates['Source_id']))) + ']\n'
-    parset += 'shift.phasecenter=[' + ','.join(list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), candidates['LOTSS_RA', 'LOTSS_DEC']))) + ']\n'
+    parset += 'msout.name=[' + ','.join(list(map(lambda s: prefix + 'P{:d}.ms'.format(int(s)), candidates['Source_id']))) + ']\n'
+    parset += 'shift.phasecenter=[' + ','.join(list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), candidates['RA', 'DEC']))) + ']\n'
     return parset
 
 if __name__ == '__main__':
@@ -137,7 +138,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--catalog', dest='catalog', help='Catalog to select candidate calibrators from.')
-    parser.add_argument('--write-parsets', dest='writepset', help='Write out parsets to do the splitting.', default=True)
+    parser.add_argument('--write-parsets', dest='writepset', help='Write out parsets to do the splitting.', default=False, type=bool)
+    parser.add_argument('--prefix', dest='prefix', help='Prefix for the split out measurement sets.', default='')
     parser.add_argument('--solutions_phase', dest='sols_phase', help='Phase solutions on infield calibrator.', default='')
     parser.add_argument('--solset_phase', dest='ss_phase', help='Solset for phase solutions on infield calibrator.', default='sol001')
     parser.add_argument('--solutions_amp', dest='sols_amp', help='Amplitude solutions on infield calibrator.', default='')
@@ -149,17 +151,17 @@ if __name__ == '__main__':
         parser.error('Cannot specify --solutions_amp without specifying --solutions_phase.')
 
     candidates = find_candidates(args.catalog)
-    candidates.write('dde_calibrators.csv', format='ascii.csv', overwrite=True)
-    if args.writepset:
+    candidates.write('dde_calibrators.csv', format='ascii.csv')
+    if ast.literal_eval(args.writepset):
         Nchunks = (len(candidates) // 20) + 1
         for i in xrange(Nchunks):
             candidate_chunk = candidates[10*i:10*(i+1)]
             if args.sols_phase:
-                parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase)
+                parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase, prefix=args.prefix)
                 if args.sols_amp:
-                    parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase, sols_amp=args.sols_amp, solset_amp=args.ss_amp)
+                    parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase, sols_amp=args.sols_amp, solset_amp=args.ss_amp, prefix=args.prefix)
             else:
-                parset = make_parset(candidate_chunk)
+                parset = make_parset(candidate_chunk, prefix=args.prefix)
 
             with open('shift_to_calibrators_{:01d}.parset'.format(i), 'w') as f:
                 f.write(parset)
