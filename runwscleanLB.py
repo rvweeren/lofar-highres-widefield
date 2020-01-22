@@ -1799,7 +1799,10 @@ if args['imsize'] != None:
 TEC = args['no_tec']
 idg = args['idg']
 multiscale = args['multiscale']
-imageout  = args['imagename'] + '_'
+if args['imagename'] != 'image':
+    imageout  = args['imagename'] + '_'
+else:
+    imageout = mslist[0] + '_'
 dobeamcor = args['no_beamcor']
 if args['fitsmask'] != None:
   fitsmask = args['fitsmask']
