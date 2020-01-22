@@ -129,7 +129,7 @@ msout.overwrite = True
 
 '''
     parset += 'msout.name=[' + ','.join(list(map(lambda s: 'P{:d}.ms'.format(int(s)), candidates['Source_id']))) + ']\n'
-    parset += 'shift.phasecenter=[' + ','.join(list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), candidates['RA', 'DEC']))) + ']\n'
+    parset += 'shift.phasecenter=[' + ','.join(list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), candidates['LOTSS_RA', 'LOTSS_DEC']))) + ']\n'
     return parset
 
 if __name__ == '__main__':
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--catalog', dest='catalog', help='Catalog to select candidate calibrators from.')
-    parser.add_argument('--write-parsets', dest='writepset', help='Write out parsets to do the splitting.', default=False, type=bool)
+    parser.add_argument('--write-parsets', dest='writepset', help='Write out parsets to do the splitting.', default=True)
     parser.add_argument('--solutions_phase', dest='sols_phase', help='Phase solutions on infield calibrator.', default='')
     parser.add_argument('--solset_phase', dest='ss_phase', help='Solset for phase solutions on infield calibrator.', default='sol001')
     parser.add_argument('--solutions_amp', dest='sols_amp', help='Amplitude solutions on infield calibrator.', default='')
@@ -149,8 +149,8 @@ if __name__ == '__main__':
         parser.error('Cannot specify --solutions_amp without specifying --solutions_phase.')
 
     candidates = find_candidates(args.catalog)
-    candidates.write('dde_calibrators.csv', format='ascii.csv')
-    if ast.literal_eval(args.writepset):
+    candidates.write('dde_calibrators.csv', format='ascii.csv', overwrite=True)
+    if args.writepset:
         Nchunks = (len(candidates) // 20) + 1
         for i in xrange(Nchunks):
             candidate_chunk = candidates[10*i:10*(i+1)]
