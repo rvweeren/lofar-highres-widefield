@@ -1,0 +1,174 @@
+##########################################################
+## Please update these parameters. 			##
+##########################################################
+
+# software paths
+! long_baseline_pipeline_dir            = /project/sksp/Software/long_baseline_pipeline
+! widefield_dir = /project/sksp/Software/lofar-highres-widefield
+! ddf_pipeline_dir = /project/sksp/Software/ddf-pipeline
+! prefactor_dir                         = /project/sksp/Software/prefactor
+! losoto_directory                     = /opt/lofar/losoto
+! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
+! wsclean_executable    = /opt/lofar/wsclean/bin/wsclean
+! dppp_executable    = /opt/lofar/DPPP/bin/DPPP
+! lofar_directory 			= $LOFARROOT
+
+# ## target data information
+! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
+#! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
+! target_input_pattern          = S*_phasecal.MS
+
+## Stations to flag
+! flag_baselines                = [ ] ## for HBA data before October 2015, should set to: [ CS013HBA* ]
+
+##########################################################
+## These parameters may need to be updated.		##
+##########################################################
+
+## Output directories
+! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
+! results_directory             = {{ job_directory }}/results
+! inspection_directory          = {{ results_directory }}/inspection/
+! cal_values_directory          = {{ results_directory }}/results/cal_values
+
+## Runtime setup -- will depend on your computing cluster
+! num_proc_per_node             = 32    ## number of processes to use per step per node
+! num_proc_per_node_limit       = 4     ## number of processes to use per step per node for tasks with high i/o (dppp or cp) or memory (eg calibration)
+! max_dppp_threads              = 8     ## number of threads per process for NDPPP
+! error_tolerance               = False ## False = stop if any subband fails, True = keep going
+
+##########################################################
+## Changing these will probably break something.	##
+##########################################################
+
+## global information
+! working_directory         = input.output.working_directory/input.output.job_name
+! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
+! prefactor_scripts			= {{ prefactor_dir }}/scripts
+
+! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
+! datadi_col = DATA
+! delaycal_phase = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
+! delaycal_amp = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
+
+! rfistrategy			= HBAdefault
+! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
+
+#! substep_pybdsf = run_pybdsf,
+! substep_pybdsf = 
+! lotss_catalog = PREFACTOR_SCRATCH_DIR/Input/catalog.csv
+! dde_catalog = {{ working_directory }}/dde_calibrators.csv
+##
+## END CONFIGURATION
+
+
+##########################################################
+## Steps to run.					##
+##########################################################
+
+! substep_clip = clipATeam, ## leave blank for no a-team clipping
+! substep_flag = # aoflagging,  ## turned off by default
+! substep_cleanup = ,cleanup
+
+pipeline.steps = [ setup, selfcal_ddecals, finalize ]
+
+pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, cp_data]
+pipeline.steps.selfcal_ddecals = [ selfcal_source ]
+pipeline.steps.finalize = [ make_results_mapfile, move_results ]
+
+
+###########################################################################
+
+
+##################################################################################################################
+##														##
+##			BEGIN PIPELINE: DO NOT UPDATE BELOW THIS LINE!						##
+##														##
+##################################################################################################################
+
+## create directories
+
+# create the results directory if needed
+mk_results_dir.control.kind               = plugin
+mk_results_dir.control.type               = makeDirectory
+mk_results_dir.control.directory          = {{ results_directory }}
+
+# create the inspection_directory if needed
+mk_inspect_dir.control.kind               = plugin
+mk_inspect_dir.control.type               = makeDirectory
+mk_inspect_dir.control.directory          = {{ inspection_directory }}
+
+# create the cal_values_directory if needed
+mk_cal_values_dir.control.kind               =  plugin
+mk_cal_values_dir.control.type               =  makeDirectory
+mk_cal_values_dir.control.directory          =  {{ cal_values_directory }}
+
+# create a directory for the ionex files
+mk_ionex_dir.control.kind		  = plugin
+mk_ionex_dir.control.type		  = makeDirectory
+mk_ionex_dir.control.directory		  = {{ ionex_path }}
+
+# generate a mapfile of all the target data
+createmap_target.control.kind             = plugin
+createmap_target.control.type             = createMapfile
+createmap_target.control.method           = mapfile_from_folder
+createmap_target.control.mapfile_dir      = input.output.mapfile_dir
+createmap_target.control.filename         = createmap_target.mapfile
+createmap_target.control.folder           = {{ target_input_path }}
+createmap_target.control.pattern          = {{ target_input_pattern }}
+
+createmap_preptarg.control.kind                                =   plugin
+createmap_preptarg.control.type                                =   makeResultsMapfile
+createmap_preptarg.control.mapfile_dir                         =   input.output.mapfile_dir
+createmap_preptarg.control.filename                            =   createmap_preptarg.mapfile
+createmap_preptarg.control.mapfile_in                          =   createmap_target.output.mapfile
+createmap_preptarg.control.target_dir                          =   {{ working_directory }}
+createmap_preptarg.control.make_target_dir                     =   False
+createmap_preptarg.control.new_suffix                          =   .ms
+
+cp_data.control.kind            = recipe
+cp_data.control.type            = executable_args
+cp_data.control.executable      = /bin/cp
+cp_data.control.max_per_node    = 1
+cp_data.control.mapfiles_in     = [createmap_target.output.mapfile, createmap_preptarg.output.mapfile]
+cp_data.control.inputkeys       = [infile,outfile]
+cp_data.argument.flags          = [-r,infile,outfile]
+
+#
+# Find and split out all calibrators
+#
+selfcal_source.control.kind         = recipe
+selfcal_source.control.type          = executable_args
+selfcal_source.control.executable   = {{ widefield_dir }}/utils/runwscleanLB.py
+selfcal_source.control.max_per_node = 4
+selfcal_source.control.mapfile_in   = cp_data.output.mapfile
+#selfcal_source.control.inputkeys    = [msin]
+selfcal_source.control.skip_infile  = True
+selfcal_source.argument.flags       = [--longbaseline, --multiscale, *.ms]
+selfcal_source.argument.imsize      = 768
+selfcal_source.argument.robust      = -1.0
+selfcal_source.argument.niter       = 5000
+selfcal_source.argument.pixelscale  = 0.025
+selfcal_source.argument.channelsout = 6
+selfcal_source.argument.uvmin       = 40000
+selfcal_source.argument.stop        = 2
+selfcal_source.argument.phasecycles = 1
+selfcal_source.argument.maskthreshold   = 7
+
+# Move the corrected datasets to the results folder.
+make_results_mapfile.control.kind                        =   plugin
+make_results_mapfile.control.type                        =   makeResultsMapfile
+make_results_mapfile.control.mapfile_dir                 =   input.output.mapfile_dir
+make_results_mapfile.control.filename                    =   make_results_mapfile.mapfile
+make_results_mapfile.control.mapfile_in                  =   selfcal_source.output.mapfile
+make_results_mapfile.control.target_dir                  =   {{ results_directory }}
+make_results_mapfile.control.make_target_dir             =   False
+
+# Move the results to where we want them
+move_results.control.kind                                =   recipe
+move_results.control.type                                =   executable_args
+move_results.control.executable                          =   /bin/mv
+move_results.control.max_per_node                        =   {{ num_proc_per_node_limit }}
+move_results.control.mapfiles_in                         =   [make_results_mapfile.output.mapfile,make_results_mapfile.output.mapfile]
+move_results.control.inputkeys                           =   [source,destination]
+move_results.control.arguments                           =   [source,destination]
