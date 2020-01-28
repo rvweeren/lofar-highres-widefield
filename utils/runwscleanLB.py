@@ -17,6 +17,7 @@ import pickle
 import logging
 import aplpy
 import fnmatch
+import getpass
 
 from lofar.stationresponse import stationresponse
 
@@ -291,7 +292,7 @@ def archive(mslist, outtarname, regionfile, fitsmask, imagename):
     msout = ms + '.calibrated'
     if os.path.isdir(msout):
       os.system('rm -rf ' + msout)
-    cmd  ='DPPP numthreads=32 msin=' + ms + ' msout=' + msout + ' '
+    cmd  ='DPPP numthreads=8 msin=' + ms + ' msout=' + msout + ' '
     cmd +='msin.datacolumn=CORRECTED_DATA msout.storagemanager=dysco steps=[]'
     os.system(cmd)
 
@@ -561,7 +562,7 @@ def create_beamcortemplate(ms):
   """
   H5name = ms + '_templatejones.h5'   
 
-  cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=DATA msout=. '
+  cmd = 'DPPP numthreads=8 msin=' + ms + ' msin.datacolumn=DATA msout=. '
   cmd += 'msin.modelcolumn=DATA '
   cmd += 'steps=[ddecal] ddecal.type=ddecal '
   cmd += 'ddecal.maxiter=1 ddecal.usemodelcolumn=True ddecal.nchan=1 '
@@ -863,7 +864,7 @@ def beamcor(ms):
     print cmdlosoto
     os.system(cmdlosoto)
     
-    cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=DATA msout=. '
+    cmd = 'DPPP numthreads=8 msin=' + ms + ' msin.datacolumn=DATA msout=. '
     cmd += 'msin.weightcolumn=WEIGHT_SPECTRUM '
     cmd += 'msout.datacolumn=CORRECTED_DATA steps=[ac1,ac2] msout.storagemanager=dysco '
     cmd += 'ac1.parmdb='+H5name + ' ac2.parmdb='+H5name + ' '
@@ -881,7 +882,7 @@ def beamcormodel(ms):
     """   
     H5name = ms + '_templatejones.h5'   
     
-    cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=MODEL_DATA msout=. '
+    cmd = 'DPPP numthreads=8 msin=' + ms + ' msin.datacolumn=MODEL_DATA msout=. '
     cmd += 'msout.datacolumn=MODEL_DATA_BEAMCOR steps=[ac1,ac2] msout.storagemanager=dysco '
     cmd += 'ac1.parmdb='+H5name + ' ac2.parmdb='+H5name + ' '
     cmd += 'ac1.type=applycal ac2.type=applycal '
@@ -951,7 +952,7 @@ def getimsize(boxfile, cellsize=1.5):
 
 def smoothsols(parmdb, ms, longbaseline):
     
-    username = os.getlogin()
+    username = getpass.getuser()
     if username == 'rvweerenold':
        losoto = '/home/rvweeren/.local/bin/losoto'
     else:
@@ -982,7 +983,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
 
     # APPLYCAL CASE I (rare)
     if (soltype == 'complexgain' or soltype == 'rotation+diagonal') and (preapplyphase == False):
-      cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
+      cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
       #cmd += 'msin.weightcolumn='+weight_spectrum + ' '
       cmd += 'msout.datacolumn=CORRECTED_DATA '
       if rotation:
@@ -1001,7 +1002,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
 
     # APPLYCAL CASE II
     if soltype == 'scalarphase' and TEC == False:
-      cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
+      cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
       cmd += 'msout.datacolumn=CORRECTED_DATA steps=[ac1] msout.storagemanager=dysco '
       cmd += 'ac1.parmdb=phaseonly'+parmdb + ' ac1.type=applycal '
       cmd += 'ac1.correction=phase000 '
@@ -1010,7 +1011,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
     
     # APPLYCAL CASE III  
     if (soltype == 'scalarphase') and (TEC == True):
-      cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
+      cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
       cmd += 'msout.datacolumn=CORRECTED_DATA msout.storagemanager=dysco '
       if puretec:
         cmd += 'steps=[ac2] '
@@ -1027,7 +1028,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
     # APPLYCAL CASE IV      
     if (soltype == 'complexgain' or soltype == 'rotation+diagonal') and (preapplyphase == True):
        
-      cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
+      cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
       cmd += 'msout.storagemanager=dysco '
       if TEC == False:
         if rotation:  
@@ -1371,7 +1372,7 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
     
     
     
-    username = os.getlogin()
+    username = getpass.getuser()
     if username == 'rvweerenold':
        wsclean = '/net/lofar1/data1/rvweeren/software/wsclean-code-2.6oct12/wsclean/build/wsclean'
     else:
@@ -1472,7 +1473,7 @@ def runDPPPskymodel(ms, parmdb, skymodel, solint_phaseonly=2, nchan_phase=5,solt
     os.system(cmdmsdb)
     
 
-    cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
+    cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
     cmd += 'msout.datacolumn=CORRECTED_DATA '
     cmd += 'msin.weightcolumn='+weight_spectrum + ' '
     cmd += 'steps=[gaincal] ' + 'msout.storagemanager=dysco gaincal.type=gaincal '
@@ -1507,7 +1508,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
     losotoparset_tecandphase = create_losoto_tecandphaseparset(ms)
     losotoparset_tec = create_losoto_tecparset(ms)
 
-    username = os.getlogin()
+    username = getpass.getuser()
     if username == 'rvweerenold':
        losoto = '/home/rvweeren/.local/bin/losoto'
     else:
@@ -1527,7 +1528,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
         sys.exit()
     
  
-    cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. msin.modelcolumn=MODEL_DATA '
+    cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. msin.modelcolumn=MODEL_DATA '
     cmd += 'msin.weightcolumn='+weight_spectrum + ' '
     cmd += 'steps=[ddecal] ' + 'msout.storagemanager=dysco ddecal.type=ddecal '
     cmd += 'ddecal.maxiter=100 ddecal.propagatesolutions=True '
@@ -1594,7 +1595,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
     os.system(cmd)
     #sys.exit()  
     if preapplyphase: # APPLY FIRST 
-        cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
+        cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=DATA msout=. '
         cmd += 'msin.weightcolumn='+weight_spectrum + ' msout.storagemanager=dysco '
         if TEC == False:
           cmd += 'msout.datacolumn=CORRECTED_DATA_PHASE steps=[ac1] '
@@ -1624,7 +1625,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
           os.system(cmdlosotophase)
 
         # RUN DPPP again
-        cmd = 'DPPP numthreads=32 ' + 'msin=' + ms + ' msin.datacolumn=CORRECTED_DATA_PHASE msout=. '
+        cmd = 'DPPP numthreads=8 ' + 'msin=' + ms + ' msin.datacolumn=CORRECTED_DATA_PHASE msout=. '
         cmd += 'msin.weightcolumn='+weight_spectrum + ' '
         cmd += 'msin.modelcolumn=MODEL_DATA '
         cmd += 'steps=[ddecal] ' + 'msout.storagemanager=dysco ddecal.type=ddecal '
@@ -1754,14 +1755,23 @@ parser.add_argument('--start', help='start selfcal cycle at this iteration, defa
 parser.add_argument('--stop', help='stop selfcal cycle at this iteration, default=10', default=10, type=int)
 parser.add_argument('--no-smoothcal', help='median smooth amplitudes', action='store_false')
 parser.add_argument('--maskthreshold', help='threshold for MakeMask.py, default=5', default=5, type=int)
-parser.add_argument('ms', nargs='*', help='msfile(s)')  
-
-
-
-
+parser.add_argument('--ms', nargs='*', help='msfile(s)')  
+parser.add_argument('--genericpipeline', help='Specify if script is used inside the genericpipeline. Strips full paths if specified.', action='store_true')
 
 args = vars(parser.parse_args())
 #print args
+import os
+print 'Current working directory is' + os.getcwd()
+print 'Current real path is' + os.path.realpath('./')
+print 'Current directory contents:'
+print os.listdir('.')
+print 'Running directory contents:'
+print os.listdir(os.getcwd())
+if args['genericpipeline']:
+    # Change directories, because files are in the working directory, but this is not where the script is executed.
+    os.chdir(os.getcwd())
+print 'Current directory contents:'
+print os.listdir('.')
 
 if args['skymodel'] != None:
   if not (os.path.isfile(args['skymodel'])):
@@ -1789,8 +1799,13 @@ if args['boxfile'] != None and args['imsize'] != None:
 
 mslist = sorted(args['ms'])
 for ms_id, ms in enumerate(mslist):
-   mslist[ms_id] = ms.replace('/', '') # remove possible / at end of ms
+   #mslist[ms_id] = ms.replace('/', '') # remove possible / at end of ms
+   mslist[ms_id] = ms.rstrip('/') # remove possible / at end of ms
+   if args['genericpipeline']:
+        mslist[ms_id] = mslist[ms_id].split('/')[-1]
 
+print 'mslist contains the following measurement sets:'
+print mslist
 
 if args['boxfile'] != None:
   imsize   = str(getimsize(args['boxfile'], args['pixelscale']))
@@ -1842,7 +1857,7 @@ logging.info('Output file will be:       ' + outtarname)
 
 
 
-username = os.getlogin()
+username = getpass.getuser()
 if username == 'rvweerenold':
   makemask = '/net/para10/data1/shimwell/software/killmsddf/new-install/DDFacet/SkyModel/MakeMask.py'
 else:

@@ -12,6 +12,13 @@ The pipeline is split up in different steps, to accomodate a Grid workflow. Each
 genericpipeline.py <step>.parset
 ```
 
+Steps in the pipeline are:
+
+1. Subtract the 6" LoTSS map from the input data.
+2. Find and split out DDE calibrator candidates from the LoTSS catalog. These are sources brighter than 25 mJy/beam peak flux.
+3. Selfcal on the DDE calibrator candidates.
+
+
 Requirements
 ------------
 * DDFacet: https://github.com/saopicc/DDFacet

@@ -16,7 +16,7 @@
 # ## target data information
 ! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
 #! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
-! target_input_pattern          = S*_phasecal.MS
+! target_input_pattern          = L*_phasecal.MS
 
 ## Stations to flag
 ! flag_baselines                = [ ] ## for HBA data before October 2015, should set to: [ CS013HBA* ]
@@ -27,6 +27,7 @@
 
 ## Output directories
 ! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
+#! job_directory                 = /project/sksp/Share/test_lb_widefield_step3/
 ! results_directory             = {{ job_directory }}/results
 ! inspection_directory          = {{ results_directory }}/inspection/
 ! cal_values_directory          = {{ results_directory }}/results/cal_values
@@ -74,7 +75,7 @@ pipeline.steps = [ setup, selfcal_ddecals, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, cp_data]
 pipeline.steps.selfcal_ddecals = [ selfcal_source ]
-pipeline.steps.finalize = [ make_results_mapfile, move_results ]
+pipeline.steps.finalize = [ make_results_mapfile_images, move_results_images ]
 
 
 ###########################################################################
@@ -141,10 +142,12 @@ selfcal_source.control.kind         = recipe
 selfcal_source.control.type          = executable_args
 selfcal_source.control.executable   = {{ widefield_dir }}/utils/runwscleanLB.py
 selfcal_source.control.max_per_node = 4
-selfcal_source.control.mapfile_in   = cp_data.output.mapfile
-#selfcal_source.control.inputkeys    = [msin]
-selfcal_source.control.skip_infile  = True
-selfcal_source.argument.flags       = [--longbaseline, --multiscale, *.ms]
+#selfcal_source.control.mapfile_in   = cp_data.output.mapfile
+selfcal_source.control.mapfile_in   = createmap_preptarg.output.mapfile
+selfcal_source.control.inputkeys    = [msin]
+#selfcal_source.control.skip_infile  = True
+#selfcal_source.control.arguments    = msin
+selfcal_source.argument.flags       = [--longbaseline, --multiscale, --genericpipeline]
 selfcal_source.argument.imsize      = 768
 selfcal_source.argument.robust      = -1.0
 selfcal_source.argument.niter       = 5000
@@ -153,22 +156,34 @@ selfcal_source.argument.channelsout = 6
 selfcal_source.argument.uvmin       = 40000
 selfcal_source.argument.stop        = 2
 selfcal_source.argument.phasecycles = 1
-selfcal_source.argument.maskthreshold   = 7
+selfcal_source.argument.maskthreshold   = 5
+selfcal_source.argument.ms          = msin
+
+#
+# Finalize
+#
+createmap_images.control.kind                                    = plugin
+createmap_images.control.type                                    = createMapfile
+createmap_images.control.method                                  = mapfile_from_folder
+createmap_images.control.mapfile_dir                             = input.output.mapfile_dir
+createmap_images.control.filename                                = createmap_images.mapfile
+createmap_images.control.folder                                  = {{ working_directory }}
+createmap_images.control.pattern                                 = *-MFS*.fits
 
 # Move the corrected datasets to the results folder.
-make_results_mapfile.control.kind                        =   plugin
-make_results_mapfile.control.type                        =   makeResultsMapfile
-make_results_mapfile.control.mapfile_dir                 =   input.output.mapfile_dir
-make_results_mapfile.control.filename                    =   make_results_mapfile.mapfile
-make_results_mapfile.control.mapfile_in                  =   selfcal_source.output.mapfile
-make_results_mapfile.control.target_dir                  =   {{ results_directory }}
-make_results_mapfile.control.make_target_dir             =   False
+make_results_mapfile_images.control.kind                         =   plugin
+make_results_mapfile_images.control.type                         =   makeResultsMapfile
+make_results_mapfile_images.control.mapfile_dir                  =   input.output.mapfile_dir
+make_results_mapfile_images.control.filename                     =   make_results_mapfile_images.mapfile
+make_results_mapfile_images.control.mapfile_in                   =   createmap_images.output.mapfile
+make_results_mapfile_images.control.target_dir                   =   {{ results_directory }}
+make_results_mapfile_images.control.make_target_dir              =   True
 
 # Move the results to where we want them
-move_results.control.kind                                =   recipe
-move_results.control.type                                =   executable_args
-move_results.control.executable                          =   /bin/mv
-move_results.control.max_per_node                        =   {{ num_proc_per_node_limit }}
-move_results.control.mapfiles_in                         =   [make_results_mapfile.output.mapfile,make_results_mapfile.output.mapfile]
-move_results.control.inputkeys                           =   [source,destination]
-move_results.control.arguments                           =   [source,destination]
+move_results_images.control.kind                                 =   recipe
+move_results_images.control.type                                 =   executable_args
+move_results_images.control.executable                           =   /bin/mv
+move_results_images.control.max_per_node                         =   {{ num_proc_per_node_limit }}
+move_results_images.control.mapfiles_in                          =   [make_results_mapfile_images.output.mapfile,make_results_mapfile.output.mapfile]
+move_results_images.control.inputkeys                            =   [source,destination]
+move_results_images.control.arguments                            =   [source,destination]
