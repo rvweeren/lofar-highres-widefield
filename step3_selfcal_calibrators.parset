@@ -75,7 +75,7 @@ pipeline.steps = [ setup, selfcal_ddecals, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, cp_data]
 pipeline.steps.selfcal_ddecals = [ selfcal_source ]
-pipeline.steps.finalize = [ make_results_mapfile_images, move_results_images ]
+pipeline.steps.finalize = [ createmap_images, make_results_mapfile_images, move_results_images ]
 
 
 ###########################################################################
