@@ -28,7 +28,8 @@
 ## Output directories
 ! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
 #! job_directory                 = /project/sksp/Share/test_lb_widefield_step3/
-! results_directory             = {{ job_directory }}/results
+#! results_directory             = {{ job_directory }}/results
+! results_directory             = /project/sksp/Share/test_lb_widefield_step3/
 ! inspection_directory          = {{ results_directory }}/inspection/
 ! cal_values_directory          = {{ results_directory }}/results/cal_values
 
@@ -154,8 +155,8 @@ selfcal_source.argument.niter       = 5000
 selfcal_source.argument.pixelscale  = 0.025
 selfcal_source.argument.channelsout = 6
 selfcal_source.argument.uvmin       = 40000
-selfcal_source.argument.stop        = 2
-selfcal_source.argument.phasecycles = 1
+selfcal_source.argument.stop        = 6
+selfcal_source.argument.phasecycles = 3
 selfcal_source.argument.maskthreshold   = 5
 selfcal_source.argument.ms          = msin
 
@@ -184,6 +185,6 @@ move_results_images.control.kind                                 =   recipe
 move_results_images.control.type                                 =   executable_args
 move_results_images.control.executable                           =   /bin/mv
 move_results_images.control.max_per_node                         =   {{ num_proc_per_node_limit }}
-move_results_images.control.mapfiles_in                          =   [make_results_mapfile_images.output.mapfile,make_results_mapfile.output.mapfile]
+move_results_images.control.mapfiles_in                          =   [createmap_images.output.mapfile, make_results_mapfile_images.output.mapfile]
 move_results_images.control.inputkeys                            =   [source,destination]
 move_results_images.control.arguments                            =   [source,destination]
