@@ -4,15 +4,16 @@
 
 # software paths
 ! long_baseline_pipeline_dir            = /project/sksp/Software/long_baseline_pipeline
-! widefield_dir                         = /project/sksp/Software/lofar-highres-widefield
-! ddf_pipeline_dir                      = /project/sksp/Software/ddf-pipeline
+! widefield_dir = /project/sksp/Software/lofar-highres-widefield
+! ddf_pipeline_dir = /project/sksp/Software/ddf-pipeline
 ! prefactor_dir                         = /project/sksp/Software/prefactor
-! losoto_directory                      = /opt/lofar/losoto
-! aoflagger				                = /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
-! lofar_directory 			            = $LOFARROOT
+! losoto_directory                     = /opt/lofar/losoto
+! aoflagger				= /opt/lofar/aoflagger/bin/aoflagger ## path to your aoflagger executable
+! lofar_directory 			= $LOFARROOT
 
 # ## target data information
 ! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
+#! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
 ! target_input_pattern          = L*.ms
 
 ## Stations to flag
@@ -24,7 +25,8 @@
 
 ## Output directories
 ! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
-! results_directory             = $RUNDIR/Output/results
+#! results_directory             = $RUNDIR/Output/results ## @NO_OVERWRITE@
+! results_directory             = /project/sksp/Share/test_lb_widefield_step1/
 ! inspection_directory          = {{ results_directory }}/inspection/
 ! cal_values_directory          = {{ results_directory }}/results/cal_values
 
@@ -39,14 +41,17 @@
 ##########################################################
 
 ## global information
-! working_directory         = input.output.working_directory/input.output.job_name
-! scripts			 	    = {{ long_baseline_pipeline_dir }}/bin
+! working_directory                        = input.output.working_directory/input.output.job_name
+! scripts			 	= {{ long_baseline_pipeline_dir }}/bin
 ! prefactor_scripts			= {{ prefactor_dir }}/scripts
 
-! ddf_dir                   = /project/sksp/Data/L659948_4ch_4s/lotss_products
-! datadi_col                = DATA
-! delaycal_phase            = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
-! delaycal_amp              = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
+! ddf_dir = /project/sksp/Data/L659948_4ch_4s/lotss_products
+! datadi_col = DATA
+! delaycal_phase = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/phaseonlySL333880_1ch_16s.mssolsgrid_8.h5
+! delaycal_amp = /project/sksp/Data/L659948_4ch_4s/infield_calibrator/SL333880_1ch_16s.mssolsgrid_8.h5
+
+! rfistrategy			= HBAdefault
+! max_length = 60 ## amount of subbands to concatenate for full-bandwidth flagging (for calibrator you can take all SBs, for target stick to about 148)
 
 ##
 ## END CONFIGURATION
@@ -59,7 +64,7 @@ pipeline.steps = [setup, subtract_lotss, apply_di, finalize]
 
 pipeline.steps.setup = [mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list, cp_data]
 pipeline.steps.subtract_lotss = [make_box, make_mslist, createmap_lotss_sols, cp_lotss_products, subtract_6asec]
-pipeline.steps.apply_di = [apply_infield]
+pipeline.steps.apply_di = [createmap_subtracted, apply_infield]
 pipeline.steps.finalize = [make_results_mapfile, move_results]
 
 ###########################################################################
@@ -173,10 +178,22 @@ subtract_6asec.argument.flags                   = [--boxfile,boxfile.reg,--colum
 #
 # Apply infield calibrator solutions
 #
+# Generate a mapfile of all the LoTSS subtracted data.
+createmap_subtracted.control.kind             = plugin
+createmap_subtracted.control.type             = createMapfile
+createmap_subtracted.control.mapfile_in       = cp_data.output.mapfile
+createmap_subtracted.control.filename         = createmap_subtracted.mapfile
+createmap_subtracted.control.method           = mapfile_from_folder
+createmap_subtracted.control.folder           = {{ job_directory }}
+createmap_subtracted.make_target_dir          = False
+createmap_subtracted.new_suffix               = .ifcorr.ms
+
+# Apply infield calibrator solutions.
 apply_infield.control.type                      = dppp
 apply_infield.control.max_per_node              = {{ num_proc_per_node_limit }}
 apply_infield.control.error_tolerance           = {{ error_tolerance }}
-apply_infield.control.mapfiles_in               = [createmap_preptarg.output.mapfile]
+#apply_infield.control.mapfiles_in               = [createmap_preptarg.output.mapfile]
+apply_infield.control.mapfiles_in               = [createmap_subtracted.output.mapfile]
 apply_infield.control.inputkeys                 = [input_file]
 apply_infield.argument.numthreads               = {{ max_dppp_threads }}
 apply_infield.argument.msin                     = input_file
