@@ -16,7 +16,7 @@
 # ## target data information
 ! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
 #! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
-! target_input_pattern          = L*.ms
+! target_input_pattern          = sub6asec_L*.ms
 
 ## Stations to flag
 ! flag_baselines                = [ ] ## for HBA data before October 2015, should set to: [ CS013HBA* ]
@@ -27,14 +27,15 @@
 
 ## Output directories
 ! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
-! results_directory             = {{ job_directory }}/results
+#! results_directory             = {{ job_directory }}/results
+! results_directory             = /project/sksp/Share/test_lb_widefield_step2
 ! inspection_directory          = {{ results_directory }}/inspection/
 ! cal_values_directory          = {{ results_directory }}/results/cal_values
 
 ## Runtime setup -- will depend on your computing cluster
-! num_proc_per_node             = input.output.max_per_node    ## number of processes to use per step per node
+! num_proc_per_node             = 4    ## number of processes to use per step per node
 ! num_proc_per_node_limit       = 4     ## number of processes to use per step per node for tasks with high i/o (dppp or cp) or memory (eg calibration)
-! max_dppp_threads              = 8     ## number of threads per process for NDPPP
+! max_dppp_threads              = 2     ## number of threads per process for NDPPP
 ! error_tolerance               = False ## False = stop if any subband fails, True = keep going
 
 ##########################################################
@@ -57,7 +58,9 @@
 #! substep_pybdsf = run_pybdsf,
 ! substep_pybdsf = 
 ! lotss_catalog = PREFACTOR_SCRATCH_DIR/Input/catalog.csv
-! dde_catalog = {{ working_directory }}/dde_calibrators.csv
+#! dde_catalog = {{ working_directory }}/dde_calibrators.csv
+#! dde_catalog = /project/sksp/Software/lofar-highres-widefield/testdir/test_with_GRID_LRT/input_step2/dde_calibrators.csv
+! dde_catalog = $RUNDIR/../dde_calibrators.csv
 ##
 ## END CONFIGURATION
 
@@ -73,8 +76,9 @@
 pipeline.steps = [ setup, split_ddecals, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list, cp_data]
-pipeline.steps.split_ddecals = [ {{ substep_pybdsf }} find_calibrators, split_calibrators]
-pipeline.steps.finalize = [ make_results_mapfile, move_results, make_results_mapfile_catalog, move_results_catalog]
+#pipeline.steps.split_ddecals = [ {{ substep_pybdsf }} find_calibrators, split_calibrators]
+pipeline.steps.split_ddecals = [ split_calibrators]
+pipeline.steps.finalize = [ createmap_results, make_results_mapfile, move_results]
 
 
 ###########################################################################
@@ -162,16 +166,30 @@ split_calibrators.argument.phaseup_cmd = {ST001:'CS*'}
 split_calibrators.argument.filter_cmd  = '!CS*&*'
 split_calibrators.argument.ncpu        = {{ num_proc_per_node }}
 split_calibrators.argument.datacol     = {{ datadi_col }}
-split_calibrators.argument.timestep    = 4
+# Average to 1 minute, based on 2s data
+# Test data is already at 4s
+#split_calibrators.argument.timestep    = 30
+split_calibrators.argument.timestep    = 15
+# Average to 1 ch/SB, based on 16 ch data
+#split_calibrators.argument.freqstep    = 16
+# Test data is at 4ch/SB, so work with that.
 split_calibrators.argument.freqstep    = 4
 split_calibrators.argument.nsbs        = 999
+
+createmap_results.control.kind                                    = plugin
+createmap_results.control.type                                    = createMapfile
+createmap_results.control.method                                  = mapfile_from_folder
+createmap_results.control.mapfile_dir                             = input.output.mapfile_dir
+createmap_results.control.filename                                = createmap_results.mapfile
+createmap_results.control.folder                                  = {{ working_directory }}
+createmap_results.control.pattern                                 = S*_phasecal.MS
 
 # Move the corrected datasets to the results folder.
 make_results_mapfile.control.kind                        =   plugin
 make_results_mapfile.control.type                        =   makeResultsMapfile
 make_results_mapfile.control.mapfile_dir                 =   input.output.mapfile_dir
 make_results_mapfile.control.filename                    =   make_results_mapfile.mapfile
-make_results_mapfile.control.mapfile_in                  =   split_calibrators.output.mapfile
+make_results_mapfile.control.mapfile_in                  =   createmap_results.output.mapfile
 make_results_mapfile.control.target_dir                  =   {{ results_directory }}
 make_results_mapfile.control.make_target_dir             =   False
 
@@ -180,6 +198,6 @@ move_results.control.kind                                =   recipe
 move_results.control.type                                =   executable_args
 move_results.control.executable                          =   /bin/mv
 move_results.control.max_per_node                        =   {{ num_proc_per_node_limit }}
-move_results.control.mapfiles_in                         =   [make_results_mapfile.output.mapfile,make_results_mapfile.output.mapfile]
+move_results.control.mapfiles_in                         =   [createmap_results.output.mapfile,make_results_mapfile.output.mapfile]
 move_results.control.inputkeys                           =   [source,destination]
 move_results.control.arguments                           =   [source,destination]
