@@ -16,7 +16,7 @@ Steps in the pipeline are:
 
 1. Subtract the 6" LoTSS map from the input data.
 2. Find DDE calibrator candidates from the LoTSS catalog and split them out. These are sources brighter than 10 mJy/beam peak flux.
-3. Selfcal on the DDE calibrator candidates.
+3. Collect all SB per source and selfcal on the DDE calibrator candidates.
 
 
 Requirements

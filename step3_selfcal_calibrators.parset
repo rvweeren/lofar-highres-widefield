@@ -16,7 +16,7 @@
 # ## target data information
 ! target_input_path             = PREFACTOR_SCRATCH_DIR/Input
 #! target_input_path             = /project/sksp/Software/lofar-highres-widefield/testdir
-! target_input_pattern          = L*_phasecal.MS
+! target_input_pattern          = S*_phasecal.MS
 
 ## Stations to flag
 ! flag_baselines                = [ ] ## for HBA data before October 2015, should set to: [ CS013HBA* ]
@@ -74,7 +74,7 @@
 
 pipeline.steps = [ setup, selfcal_ddecals, finalize ]
 
-pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, cp_data]
+pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list, cp_data]
 pipeline.steps.selfcal_ddecals = [ selfcal_source ]
 pipeline.steps.finalize = [ createmap_images, make_results_mapfile_images, move_results_images ]
 
@@ -128,6 +128,14 @@ createmap_preptarg.control.target_dir                          =   {{ working_di
 createmap_preptarg.control.make_target_dir                     =   False
 createmap_preptarg.control.new_suffix                          =   .ms
 
+# convert to a mapfile with all subbands in one list
+createmap_target_list.control.kind            =   plugin
+createmap_target_list.control.type            =   createMapfile
+createmap_target_list.control.method          =   mapfile_all_to_one
+createmap_target_list.control.mapfile_dir     =   input.output.mapfile_dir
+createmap_target_list.control.filename        =   combine_data_tar_map.mapfile
+createmap_target_list.control.mapfile_in      =   createmap_preptarg.output.mapfile
+
 cp_data.control.kind            = recipe
 cp_data.control.type            = executable_args
 cp_data.control.executable      = /bin/cp
@@ -136,15 +144,12 @@ cp_data.control.mapfiles_in     = [createmap_target.output.mapfile, createmap_pr
 cp_data.control.inputkeys       = [infile,outfile]
 cp_data.argument.flags          = [-r,infile,outfile]
 
-#
-# Find and split out all calibrators
-#
 selfcal_source.control.kind         = recipe
 selfcal_source.control.type          = executable_args
 selfcal_source.control.executable   = {{ widefield_dir }}/utils/runwscleanLB.py
 selfcal_source.control.max_per_node = 4
 #selfcal_source.control.mapfile_in   = cp_data.output.mapfile
-selfcal_source.control.mapfile_in   = createmap_preptarg.output.mapfile
+selfcal_source.control.mapfile_in   = createmap_target_list.output.mapfile
 selfcal_source.control.inputkeys    = [msin]
 #selfcal_source.control.skip_infile  = True
 #selfcal_source.control.arguments    = msin
@@ -159,6 +164,7 @@ selfcal_source.argument.stop        = 6
 selfcal_source.argument.phasecycles = 3
 selfcal_source.argument.maskthreshold   = 5
 selfcal_source.argument.ms          = msin
+#selfcal_source.argument.ms          = {{ target_input_pattern }}
 
 #
 # Finalize
