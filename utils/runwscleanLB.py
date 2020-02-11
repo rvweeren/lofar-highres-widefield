@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import ast
 import matplotlib
 matplotlib.use('Agg')
 import os, sys
@@ -1797,7 +1798,12 @@ if args['boxfile'] != None and args['imsize'] != None:
   sys.exit()
 
 
-mslist = sorted(args['ms'])
+print('Input to ms is:')
+print(args['ms'])
+if type(ast.literal_eval(args['ms'][0])) is list:
+    mslist = ast.literal_eval(args['ms'][0])
+print(mslist)
+mslist = sorted(mslist)
 for ms_id, ms in enumerate(mslist):
    #mslist[ms_id] = ms.replace('/', '') # remove possible / at end of ms
    mslist[ms_id] = ms.rstrip('/') # remove possible / at end of ms
