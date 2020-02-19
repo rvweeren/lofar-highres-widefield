@@ -1,0 +1,66 @@
+{
+    "Job": {
+        "NCPU": 24,
+        "parameter_step": 1,
+        "queue": "normal",
+        "command":"genericpipeline.py -d -c sing_pipeline.cfg $PARSET ",
+        "variables": {
+            "OBSID": "",
+            "PIPELINE_STEP": "",
+            "RESULTS_DIR": "gsiftp://gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lofar/user/sksp/diskonly/pipelines/SKSP/lbtest",
+            "ABN": "000",
+            "STARTSB": "000"
+        },
+        "wholenode": false
+    },
+    "Token": {
+        "status": "queued",
+        "times": {},
+        "variables": {
+            "_attachments": {
+                "PARSET": "step2_find_calibrators.parset",
+                "SRMFILE": "srm.txt",
+                "CATALOG": "dde_calibrators.csv"
+            },
+            "_token_keys": {
+                "$OBSID": "OBSID",
+                "$PIPELINE_STEP": "PIPELINE_STEP",
+                "$RESULTS_DIR": "RESULTS_DIR",
+                "$ABN$": "ABN",
+                "$STARTSB": "STARTSB"
+            }
+        },
+        "upload": {
+            "add_date": false,
+            "date_granularity":"hour",
+            "gzip": false,
+            "location": "$RESULTS_DIR/$OBSID",
+            "overwrite": false,
+            "template": "$OBSID_lb_split_$STARTSB_"
+        }
+    },
+    "container": {
+        "singularity": {
+            "SIMG": "gsiftp://gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lofar/user/sksp/distrib/software/lofar_sksp_ddf_gainscreens_premerge.simg"
+        }
+    },
+    "sandbox": {
+        "git": {
+            "branch": "prefactor_spider",
+            "url": "https://github.com/apmechev/GRID_Sandbox.git"
+        },
+        "scripts": [
+            {
+                "prefactor": {
+                    "branch": "master",
+                    "checkout_dir": "prefactor",
+                    "url": "https://github.com/lofar-astron/prefactor.git"
+                }
+            }
+        ]
+    },
+    "downloader":{"executable":"globus-url-copy",
+        "options":["-rst","-st", "30","-v"],
+        "extract":"true"
+    }
+}
