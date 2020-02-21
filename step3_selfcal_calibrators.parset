@@ -76,7 +76,7 @@ pipeline.steps = [ setup, selfcal_ddecals, finalize ]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list, cp_data]
 pipeline.steps.selfcal_ddecals = [ concat_data, selfcal_source ]
-pipeline.steps.finalize = [ createmap_images, make_results_mapfile_images, move_results_images ]
+pipeline.steps.finalize = [ createmap_images, make_results_mapfile_images, move_results_images, createmap_h5parms, make_results_mapfile_h5parms, move_results_h5parms ]
 
 
 ###########################################################################
@@ -184,6 +184,7 @@ selfcal_source.argument.ms          = msin
 #
 # Finalize
 #
+# Collect the final FITS images
 createmap_images.control.kind                                    = plugin
 createmap_images.control.type                                    = createMapfile
 createmap_images.control.method                                  = mapfile_from_folder
@@ -209,3 +210,30 @@ move_results_images.control.max_per_node                         =   {{ num_proc
 move_results_images.control.mapfiles_in                          =   [createmap_images.output.mapfile, make_results_mapfile_images.output.mapfile]
 move_results_images.control.inputkeys                            =   [source,destination]
 move_results_images.control.arguments                            =   [source,destination]
+
+# Collect the final h5parms.
+createmap_h5parms.control.kind                                    = plugin
+createmap_h5parms.control.type                                    = createMapfile
+createmap_h5parms.control.method                                  = mapfile_from_folder
+createmap_h5parms.control.mapfile_dir                             = input.output.mapfile_dir
+createmap_h5parms.control.filename                                = createmap_h5parms.mapfile
+createmap_h5parms.control.folder                                  = {{ working_directory }}
+createmap_h5parms.control.pattern                                 = *.h5
+
+# Move the corrected datasets to the results folder.
+make_results_mapfile_h5parms.control.kind                         =   plugin
+make_results_mapfile_h5parms.control.type                         =   makeResultsMapfile
+make_results_mapfile_h5parms.control.mapfile_dir                  =   input.output.mapfile_dir
+make_results_mapfile_h5parms.control.filename                     =   make_results_mapfile_h5parms.mapfile
+make_results_mapfile_h5parms.control.mapfile_in                   =   createmap_h5parms.output.mapfile
+make_results_mapfile_h5parms.control.target_dir                   =   {{ results_directory }}
+make_results_mapfile_h5parms.control.make_target_dir              =   True
+
+# Move the results to where we want them
+move_results_h5parms.control.kind                                 =   recipe
+move_results_h5parms.control.type                                 =   executable_args
+move_results_h5parms.control.executable                           =   /bin/mv
+move_results_h5parms.control.max_per_node                         =   {{ num_proc_per_node_limit }}
+move_results_h5parms.control.mapfiles_in                          =   [createmap_h5parms.output.mapfile, make_results_mapfile_h5parms.output.mapfile]
+move_results_h5parms.control.inputkeys                            =   [source,destination]
+move_results_h5parms.control.arguments                            =   [source,destination]
