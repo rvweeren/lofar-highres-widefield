@@ -12,11 +12,15 @@ The pipeline is split up in different steps, to accomodate a Grid workflow. Each
 genericpipeline.py <step>.parset
 ```
 
+It is mainly designed to work under the GRID_LRT package. This means parallelization is handled on a higher level, i.e. when a job runs on individual subbands, as many jobs as subbands will/should be submitted, running the parsets on that.
+
+Durations are measured on the Spider cluster. This has approximately 15 nodes of 32 cores and NVMe SSDs capable of 6 GB/s read/write as local scratch.
+
 Steps in the pipeline are:
 
-1. Subtract the 6" LoTSS map from the input data.
-2. Find DDE calibrator candidates from the LoTSS catalog and split them out. These are sources brighter than 10 mJy/beam peak flux.
-3. Collect all SB per source and selfcal on the DDE calibrator candidates.
+1. Subtract the 6" LoTSS map from the input data. This can operate on the whole bandwidth at once. Duration: <~24 hours
+2. Find DDE calibrator candidates from the LoTSS catalog and split them out. These are sources brighter than 10 mJy/beam peak flux. This operates on the 10SB blocks individually. Duration: ~29 hours on NVMe SSDs, 24 simultaneous 8 core jobs.
+3. Collect all SB per source and selfcal on the DDE calibrator candidates. This operates on the full bandwidth of each calibrator individually. Duration: 6 hours, 162 jobs.
 
 
 Requirements
