@@ -13,7 +13,7 @@ import glob
 import astropy.table as table
 import numpy as np
 
-def find_candidates(cat, fluxcut=10e-3):
+def find_candidates(cat, fluxcut=25e-3):
     ''' Identify candidate sources for DDE calibration.
 
     The given catalog is searched for potential calibrator sources based on a cut in peak intensity.
