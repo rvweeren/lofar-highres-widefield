@@ -16,12 +16,15 @@ It is mainly designed to work under the GRID_LRT package. This means paralleliza
 
 Durations are measured on the Spider cluster. This has approximately 15 nodes of 32 cores and NVMe SSDs capable of 6 GB/s read/write as local scratch.
 
-Steps in the pipeline are:
+Steps in the pipeline are (or will be):
 
 1. Subtract the 6" LoTSS map from the input data. This can operate on the whole bandwidth at once. Duration: <~24 hours
 2. Find DDE calibrator candidates from the LoTSS catalog and split them out. These are sources brighter than 10 mJy/beam peak flux. This operates on the 10SB blocks individually. Duration: ~29 hours on NVMe SSDs, 24 simultaneous 8 core jobs.
 3. Collect all SB per source and selfcal on the DDE calibrator candidates. This operates on the full bandwidth of each calibrator individually. Duration: 6 hours, 162 jobs.
-
+-- untested below this --
+4. Image the field at approximately 1.2" resolution.
+5. Divide the field in 9x9 facets and created 1" map-subtracted datasets for each of them.
+6. Image each of the facets.
 
 Requirements
 ------------
