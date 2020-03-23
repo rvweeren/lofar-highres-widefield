@@ -67,7 +67,7 @@ tl.save()
 print('6) Create and launch the jobs.')
 from GRID_LRT.application import submit
 #j = submit.JdlLauncher(numjobs=len(d.keys()), token_type=tok_type, wholenodes=False, parameter_step=4, NCPU=2)
-j = submit.SpiderLauncher(numjobs=len(d.keys()), token_type=tok_type, wholenode=False, parameter_step=999, NCPU=32)
+j = submit.SpiderLauncher(numjobs=len(d.keys()), token_type=tok_type, wholenode=False, parameter_step=999, NCPU=24)
 
 with j:
     url=j.launch()

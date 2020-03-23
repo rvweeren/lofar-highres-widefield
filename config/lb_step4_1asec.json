@@ -41,7 +41,7 @@
     },
     "container": {
         "singularity": {
-            "SIMG": "gsiftp://gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lofar/user/sksp/distrib/software/lofar_sksp_ddf_gainscreens_premerge.simg"
+            "SIMG": "gsiftp://gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lofar/user/sksp/distrib/software/lofar_sksp_ddf.sif"
         }
     },
     "sandbox": {

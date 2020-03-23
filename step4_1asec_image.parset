@@ -26,7 +26,8 @@
 ##########################################################
 
 ## Output directories
-! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
+#! job_directory                 = input.output.job_directory ## directory of the prefactor outputs
+! job_directory                 = /project/sksp/Share/test_lb_widefield_step4_rundir/
 ! results_directory             = {{ job_directory }}/results
 ! inspection_directory          = {{ results_directory }}/inspection/
 ! cal_values_directory          = {{ results_directory }}/results/cal_values
@@ -35,7 +36,7 @@
 ! num_proc_per_node             = input.output.max_per_node    ## number of processes to use per step per node
 ! num_proc_per_node_limit       = 4     ## number of processes to use per step per node for tasks with high i/o (dppp or cp) or memory (eg calibration)
 ! max_dppp_threads              = 9     ## number of threads per process for NDPPP
-! max_wsclean_threads           = 32
+! max_wsclean_threads           = 24
 ! error_tolerance               = False ## False = stop if any subband fails, True = keep going
 
 ##########################################################
@@ -67,11 +68,11 @@
 ! substep_flag = # aoflagging,  ## turned off by default
 ! substep_cleanup = ,cleanup
 
-pipeline.steps = [ setup, image_1asec]
+pipeline.steps = [ setup, image_1asec, finalize]
 
 pipeline.steps.setup = [ mk_results_dir, mk_inspect_dir, mk_cal_values_dir, createmap_target, createmap_preptarg, createmap_target_list]
-pipeline.steps.image_1asec = [ average_data, taper_image, transfer_taper, make_image, make_mask, make_image2, createmap_image_i, make_source_list]
-pipeline.steps.finalize = [ make_results_mapfile_images, move_results_images, make_results_mapfile_catalog, move_results_catalog]
+pipeline.steps.image_1asec = [ average_data, createmap_avgdata, mv_data, createmap_ms, taper_image, transfer_taper, make_mslist, make_image, make_mask, make_image2]
+pipeline.steps.finalize = [ createmap_images, make_results_mapfile_images, move_results_images]
 
 
 ###########################################################################
@@ -151,12 +152,41 @@ average_data.control.inputkeys              = [msfile]
 average_data.argument.numthreads            = {{ max_dppp_threads }}
 average_data.argument.msin                  = msfile
 average_data.argument.msin.datacolumn       = DATA
+# Remove this for production
+#average_data.argument.msin.ntimes           = 100
+# end remove this for production
 average_data.argument.msout.overwrite       = True
 average_data.argument.msout.storagemanager  = dysco
 average_data.argument.steps                 = [avg]
 average_data.argument.avg.type              = average
 average_data.argument.avg.timeresolution    = 4
 average_data.argument.avg.freqresolution    = 48.82kHz
+
+createmap_avgdata.control.kind                                =   plugin
+createmap_avgdata.control.type                                =   makeResultsMapfile
+createmap_avgdata.control.mapfile_dir                         =   input.output.mapfile_dir
+createmap_avgdata.control.filename                            =   createmap_avgdata.mapfile
+createmap_avgdata.control.mapfile_in                          =   average_data.output.mapfile
+createmap_avgdata.control.target_dir                          =   {{ working_directory }}
+createmap_avgdata.control.make_target_dir                     =   False
+createmap_avgdata.control.new_suffix                          =   .ms
+
+mv_data.control.kind            = recipe
+mv_data.control.type            = executable_args
+mv_data.control.executable      = /bin/mv
+mv_data.control.max_per_node    = 1
+mv_data.control.mapfiles_in     = [average_data.output.mapfile, createmap_avgdata.output.mapfile]
+mv_data.control.inputkeys       = [infile,outfile]
+mv_data.argument.flags          = [infile,outfile]
+
+createmap_ms.control.kind                                =   plugin
+createmap_ms.control.type                                =   makeResultsMapfile
+createmap_ms.control.mapfile_dir                         =   input.output.mapfile_dir
+createmap_ms.control.filename                            =   createmap_ms.mapfile
+createmap_ms.control.mapfile_in                          =   average_data.output.mapfile
+createmap_ms.control.target_dir                          =   {{ working_directory }}
+createmap_ms.control.make_target_dir                     =   False
+createmap_ms.control.new_suffix                          =   .ms
 
 # Run wsclean for a 1 '' image.
 taper_image.control.kind                     = recipe
@@ -166,7 +196,7 @@ taper_image.control.executable               = {{ wsclean_executable }}
 taper_image.control.args_format              = wsclean
 taper_image.control.max_per_node             = 1
 taper_image.control.error_tolerance          = {{ error_tolerance }}
-taper_image.control.mapfiles_in              = [average_data.output.mapfile]
+taper_image.control.mapfiles_in              = [createmap_ms.output.mapfile]
 taper_image.control.inputkeys                = [msfiles]
 taper_image.argument.flags                   = [-make-psf, -fit-beam, -no-reorder, -no-update-model-required, -store-imaging-weights, msfiles]
 taper_image.argument.j                       = {{ max_wsclean_threads }}
@@ -176,21 +206,34 @@ taper_image.argument.weight                  = briggs -1.5
 taper_image.argument.size                    = 1024 1024 
 taper_image.argument.scale                   = 0.05asec
 taper_image.argument.minuv-l                 = 80
-taper_image.argument.taper-gaussian          = 1.2asec
-taper_image.argument.name                    = wsclean_taper_1p2asec
+taper_image.argument.taper-gaussian          = 1.0asec
+taper_image.argument.name                    = wsclean_taper_1p0asec
 
 # Transfer the taper such that DDFacet can use them.
-transfer_taper.control.type         = pythonplugin
+transfer_taper.control.kind         = recipe
+transfer_taper.control.type         = executable_args
 transfer_taper.control.max_per_node = {{ num_proc_per_node }}
 transfer_taper.control.executable   = {{ widefield_dir }}/utils/transfer_imaging_weight.py
-transfer_taper.argument.mapfiles_in  = [average_data.output.mapfile]
-transfer_taper.argument.inputkey    = msin
-transfer_taper.argument.flags       = [--msin,msin]
+transfer_taper.control.mapfiles_in  = [createmap_ms.output.mapfile]
+transfer_taper.control.inputkeys    = [msin]
+transfer_taper.argument.flags       = [--ms,msin]
+
+make_mslist.control.kind            = recipe
+make_mslist.control.type            = executable_args
+make_mslist.control.executable      = {{ ddf_pipeline_dir }}/scripts/make_mslists.py
+make_mslist.control.max_per_node    = 1
+make_mslist.control.skip_infile     = True
+# This mapfile is not actually used. It just needs to run once.
+make_mslist.control.mapfile_in      = createmap_target_list.output.mapfile
+make_mslist.argument.flags          = [force]
 
 # Now make the image with DDFacet.
 # DDF.py --Output-Name=image_dirin_SSD_init_natural --Data-MS={:s} --Deconv-PeakFactor 0.050000 --Data-ColName {ic:s} --Data-ChunkHours 4 --Parallel-NCPU=32 --Beam-CenterNorm=1 --Deconv-CycleFactor=0 --Deconv-MaxMinorIter=10000 --Deconv-MaxMajorIter=1 --Deconv-Mode SSD --Beam-Model=LOFAR --Beam-LOFARBeamMode=A --Weight-Mode Natural  --Image-NPix=25000 --CF-wmax 50000 --CF-Nw 100 --Output-Also onNeds --Image-Cell {cell:f} --Facets-NFacets=7 --SSDClean-NEnlargeData 0 --Freq-NDegridBand 1 --Beam-NBand 1 --Facets-DiamMax 1.5 --Facets-DiamMin 0.1 --Deconv-RMSFactor=3.000000 --SSDClean-ConvFFTSwitch 10000 --Data-Sort 1 --Cache-Dir=. --Log-Memory 1 --GAClean-RMSFactorInitHMP 1.000000 --GAClean-MaxMinorIterInitHMP 10000.000000 --DDESolutions-SolsDir=SOLSDIR --Cache-Weight=reset --Output-Mode=Clean --Output-RestoringBeam {beam:s} --Weight-ColName="IMAGING_WEIGHT" --Freq-NBand=2 --RIME-DecorrMode=FT --SSDClean-SSDSolvePars [S,Alpha] --SSDClean-BICFactor 0 --Mask-Auto=1 --Mask-SigTh=10.00 --Selection-UVRangeKm=[5.0,2000.000000] --GAClean-MinSizeInit=10'.format(CONFIG['data']['mslist'], ic=CONFIG['image']['data_column'], cell=float(CONFIG['image']['cellsize_full']), beam=DDF_RESTORING_BEAM)
-make_image.control.type             = pythonplugin
+make_image.control.kind             = recipe
+make_image.control.type             = executable_args
 make_image.control.executable       = {{ ddf_executable }}
+make_image.control.mapfile_in       = mv_data.output.mapfile
+make_image.control.skip_infile      = True
 make_image.argument.Output-Name     = image_dirin_SSD_natural
 make_image.argument.Beam-CenterNorm     = 1
 make_image.argument.Beam-Model          = LOFAR
@@ -201,7 +244,7 @@ make_image.argument.Cache-Weight        = reset
 make_image.argument.CF-wmax             = 50000
 make_image.argument.CF-Nw               = 100
 make_image.argument.Data-MS             = *.ms
-make_image.argument.Data-ColName        = CORRECTED_DATA
+make_image.argument.Data-ColName        = DATA
 make_image.argument.Data-ChunkHours     = 4
 make_image.argument.Data-Sort           = 1
 make_image.argument.Deconv-PeakFactor   = 0.05
@@ -239,13 +282,18 @@ make_image.argument.Weight-Mode         = Natural
 
 make_mask.control.kind          = recipe
 make_mask.control.type          = executable_args
-make_mask.control.executable    = /opt/lofar/DDFacet/bin/MakeMask.py
+make_mask.control.executable    = /opt/lofar/DDFacet/src/SkyModel/MakeMask.py
+make_mask.control.mapfile_in    = mv_data.output.mapfile
+make_mask.control.skip_infile   = True
 make_mask.argument.RestoredIm   = image_dirin_SSD_natural.app.restored.fits
 make_mask.argument.Th           = 7.5
 make_mask.argument.Box          = 50,2
 
-make_image2.control.type             = pythonplugin
+make_image2.control.kind             = recipe
+make_image2.control.type             = executable_args
 make_image2.control.executable       = {{ ddf_executable }}
+make_image2.control.mapfile_in       = mv_data.output.mapfile
+make_image2.control.skip_infile      = True
 make_image2.argument.Output-Name     = image_dirin_SSD_natural_m
 make_image2.argument.Beam-CenterNorm     = 1
 make_image2.argument.Beam-Model          = LOFAR
@@ -257,7 +305,7 @@ make_image2.argument.Cache-Weight        = reset
 make_image2.argument.CF-wmax             = 50000
 make_image2.argument.CF-Nw               = 100
 make_image2.argument.Data-MS             = *.ms
-make_image2.argument.Data-ColName        = CORRECTED_DATA
+make_image2.argument.Data-ColName        = DATA
 make_image2.argument.Data-ChunkHours     = 4
 make_image2.argument.Data-Sort           = 1
 make_image2.argument.Deconv-PeakFactor   = 0.05
@@ -279,13 +327,13 @@ make_image2.argument.GAClean-MaxMinorIterInitHMP = 10000.000000
 make_image2.argument.GAClean-MinSizeInit = 10
 make_image2.argument.Log-Memory          = 1
 make_image2.argument.Mask-Auto           = 1
-make_image2.argument.Mask-External       = image_diring.app.restored.fits.mask.fits
+make_image2.argument.Mask-External       = image_dirin_SSD_natural.app.restored.fits.mask.fits
 make_image2.argument.Mask-SigTh          = 10.00
 make_image2.argument.Output-Mode         = Clean
 make_image2.argument.Output-RestoringBeam    = 1.5
 make_image2.argument.Output-Also         = onNeds
 make_image2.argument.Parallel-NCPU       = {{ max_wsclean_threads }}
-make_image2.argument.Predict-InitDicoModel  = image_dirin_SSD.DicoModel 
+make_image2.argument.Predict-InitDicoModel  = image_dirin_SSD_natural.DicoModel 
 make_image2.argument.RIME-DecorrMode     = FT
 make_image2.argument.SSDClean-BICFactor  = 0
 make_image2.argument.SSDClean-ConvFFTSwitch  = 10000
@@ -294,32 +342,6 @@ make_image2.argument.SSDClean-SSDSolvePars   = [S,Alpha]
 make_image2.argument.Selection-UVRangeKm = [160.0,2000.0]
 make_image2.argument.Weight-ColName      = IMAGING_WEIGHT
 make_image2.argument.Weight-Mode         = Natural
-
-# Find the image. Adapted from prefactor.
-createmap_image_i.control.kind              =   plugin
-createmap_image_i.control.type              =   addListMapfile
-createmap_image_i.control.hosts             =   [localhost]
-createmap_image_i.control.files             =   [image_dirin_SSD_m.int.restored.fits]
-createmap_image_i.control.mapfile_dir       =   input.output.mapfile_dir
-createmap_image_i.control.filename          =   make_image.mapfile
-
-#
-# Run PyBDSF to find sources
-#
-make_source_list.control.type                       = pythonplugin
-make_source_list.control.executable                 = {{ scripts }}/make_source_list.py
-make_source_list.control.error_tolerance            = {{ error_tolerance }}
-make_source_list.control.mapfile_in                 = createmap_image_i.output.mapfile
-make_source_list.control.inputkey                   = imagefile
-make_source_list.control.outputkey                  = catalogfile
-make_source_list.argument.flags                     = [imagefile,catalogfile]
-make_source_list.argument.threshisl                 = 4.0
-make_source_list.argument.threshpix                 = 5.0
-make_source_list.argument.atrous_do                 = False
-make_source_list.argument.rmsbox_bright             = (60,20)
-make_source_list.argument.adaptive_rmsbox           = True
-make_source_list.argument.atrous_jmax               = 4
-make_source_list.argument.compare_dir               = {{ job_directory }}/results/inspection
 
 #
 # Finalize
@@ -330,7 +352,7 @@ createmap_images.control.method                                  = mapfile_from_
 createmap_images.control.mapfile_dir                             = input.output.mapfile_dir
 createmap_images.control.filename                                = createmap_images.mapfile
 createmap_images.control.folder                                  = {{ working_directory }}
-createmap_images.control.pattern                                 = *restored*.fits
+createmap_images.control.pattern                                 = *.fits
 
 # Move the corrected datasets to the results folder.
 make_results_mapfile_images.control.kind                         =   plugin
@@ -346,24 +368,6 @@ move_results_images.control.kind                                 =   recipe
 move_results_images.control.type                                 =   executable_args
 move_results_images.control.executable                           =   /bin/mv
 move_results_images.control.max_per_node                         =   {{ num_proc_per_node_limit }}
-move_results_images.control.mapfiles_in                          =   [make_results_mapfile_images.output.mapfile,make_results_mapfile.output.mapfile]
+move_results_images.control.mapfiles_in                          =   [createmap_images.output.mapfile, make_results_mapfile_images.output.mapfile]
 move_results_images.control.inputkeys                            =   [source,destination]
 move_results_images.control.arguments                            =   [source,destination]
-
-# Move the corrected datasets to the results folder.
-make_results_mapfile_catalog.control.kind                        =   plugin
-make_results_mapfile_catalog.control.type                        =   makeResultsMapfile
-make_results_mapfile_catalog.control.mapfile_dir                 =   input.output.mapfile_dir
-make_results_mapfile_catalog.control.filename                    =   make_results_mapfile.mapfile
-make_results_mapfile_catalog.control.mapfile_in                  =   make_source_list.output.mapfile
-make_results_mapfile_catalog.control.target_dir                  =   {{ results_directory }}
-make_results_mapfile_catalog.control.make_target_dir             =   False
-
-# Move the results to where we want them
-move_results_catalog.control.kind                                =   recipe
-move_results_catalog.control.type                                =   executable_args
-move_results_catalog.control.executable                          =   /bin/mv
-move_results_catalog.control.max_per_node                        =   {{ num_proc_per_node_limit }}
-move_results_catalog.control.mapfiles_in                         =   [make_results_mapfile_catalog.output.mapfile,make_results_mapfile.output.mapfile]
-move_results_catalog.control.inputkeys                           =   [source,destination]
-move_results_catalog.control.arguments                           =   [source,destination]
