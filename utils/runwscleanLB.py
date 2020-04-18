@@ -1800,10 +1800,7 @@ if args['boxfile'] != None and args['imsize'] != None:
 
 print('Input to ms is:')
 print(args['ms'])
-if type(ast.literal_eval(args['ms'][0])) is list:
-    mslist = ast.literal_eval(args['ms'][0])
-print(mslist)
-mslist = sorted(mslist)
+mslist = sorted(args['ms'])
 for ms_id, ms in enumerate(mslist):
    #mslist[ms_id] = ms.replace('/', '') # remove possible / at end of ms
    mslist[ms_id] = ms.rstrip('/') # remove possible / at end of ms
