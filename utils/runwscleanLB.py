@@ -34,8 +34,8 @@ def removenans(parmdb, soltab):
    
    idxnan  = np.where((~np.isfinite(vals))) 
    
-   print idxnan
-   print 'Found some NaNs', vals[idxnan]
+   print(idxnan)
+   print('Found some NaNs', vals[idxnan])
 
    if H5.getSolset('sol000').getSoltab(soltab).getType() == 'phase':
        vals[idxnan] = 0.0
@@ -150,8 +150,8 @@ def flagms_startend(ms, tecsolsfile, tecsolint):
     goodstartid = np.argmax (np.array(goodtimesvec) > 0)
     goodendid   = len(goodtimesvec) - np.argmax (np.array(goodtimesvec[::-1]) > 0)
     
-    print 'First good solutionslot,', goodstartid, ' out of', len(goodtimesvec)
-    print 'Last good solutionslot,', goodendid, ' out of', len(goodtimesvec)    
+    print('First good solutionslot,', goodstartid, ' out of', len(goodtimesvec))
+    print('Last good solutionslot,', goodendid, ' out of', len(goodtimesvec))
     H5.close()
     
     cmd = taql + " ' select from " + ms + " where TIME in (select distinct TIME from " + ms 
@@ -159,7 +159,7 @@ def flagms_startend(ms, tecsolsfile, tecsolint):
     cmd+= " limit " + str((goodendid-goodstartid)*np.int(tecsolint)) +") giving " 
     cmd+= msout + " as plain'"
     
-    print cmd
+    print(cmd)
     os.system(cmd)
     
     os.system('rm -rf ' + ms)
@@ -185,7 +185,7 @@ def removestartendms(ms, starttime=None, endtime=None):
       cmd+= 'msin.starttime=' + starttime + ' '
     if endtime is not None:  
       cmd+= 'msin.endtime=' + endtime   + ' '   
-    print cmd  
+    print(cmd)
     os.system(cmd)
     
     cmd = 'DPPP msin=' + ms + ' ' + 'msout.storagemanager=dysco msout=' + ms + '.cuttmp '
@@ -194,14 +194,14 @@ def removestartendms(ms, starttime=None, endtime=None):
       cmd+= 'msin.starttime=' + starttime + ' '
     if endtime is not None:  
       cmd+= 'msin.endtime=' + endtime   + ' '
-    print cmd
+    print(cmd)
     os.system(cmd)    
 
 
     # Make a WEIGHT_SPECTRUM from WEIGHT_SPECTRUM_SOLVE
     t  = pt.table(ms + '.cut' , readonly=False)
 
-    print 'Adding WEIGHT_SPECTRUM_SOLVE' 
+    print('Adding WEIGHT_SPECTRUM_SOLVE')
     desc = t.getcoldesc('WEIGHT_SPECTRUM')
     desc['name']='WEIGHT_SPECTRUM_SOLVE'
     t.addcols(desc)
@@ -431,7 +431,7 @@ def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robus
    """
    
    if not longbaseline:
-       print 'Only works for long baseline data for now, you need to run the code with --longbaseline'
+       print('Only works for long baseline data for now, you need to run the code with --longbaseline')
        sys.exit()
    
    if os.path.isfile('nchan_phase.p') and os.path.isfile('solint_phase.p') and \
@@ -484,7 +484,7 @@ def determinesolintsMODELDATA(mslist, pixsize, imsize, channelsout, niter, robus
   
           
           solint_phase = np.rint(solintphase_sf*np.sqrt(100e-3/(flux/declf)) * (64./tint) )
-          print  solintphase_sf*np.sqrt(100e-3/(flux/declf)) * (64./tint) 
+          print(solintphase_sf*np.sqrt(100e-3/(flux/declf)) * (64./tint))
           print('Flux in model', flux, 'Jy')
           print('UV-selection to compute model flux', str(uvdismod/1e3), 'km')
           if solint_phase < 1:
@@ -570,7 +570,7 @@ def create_beamcortemplate(ms):
   cmd += 'ddecal.mode=complexgain ddecal.h5parm=' + H5name  + ' '
   cmd += 'ddecal.solint=10'
 
-  print cmd
+  print(cmd)
   os.system(cmd)
 
   return H5name
@@ -862,7 +862,7 @@ def beamcor(ms):
     fixbeam_ST001(H5name)
 
     cmdlosoto = losoto + ' ' + H5name + ' ' + parset
-    print cmdlosoto
+    print(cmdlosoto)
     os.system(cmdlosoto)
     
     cmd = 'DPPP numthreads=8 msin=' + ms + ' msin.datacolumn=DATA msout=. '
@@ -871,7 +871,7 @@ def beamcor(ms):
     cmd += 'ac1.parmdb='+H5name + ' ac2.parmdb='+H5name + ' '
     cmd += 'ac1.type=applycal ac2.type=applycal '
     cmd += 'ac1.correction=phase000 ac2.correction=amplitude000 ac2.updateweights=True ' 
-    print 'DPPP applycal:', cmd
+    print('DPPP applycal:', cmd)
     os.system(cmd)
    
     os.system(taql + " 'update " + ms + " set DATA=CORRECTED_DATA'")
@@ -889,7 +889,7 @@ def beamcormodel(ms):
     cmd += 'ac1.type=applycal ac2.type=applycal '
     cmd += 'ac1.correction=phase000 ac2.correction=amplitude000 ac2.updateweights=False '
     cmd += 'ac1.invert=False ac2.invert=False ' # Here we corrupt with the beam !
-    print 'DPPP applycal:', cmd
+    print('DPPP applycal:', cmd)
     os.system(cmd)
    
     return
@@ -974,7 +974,7 @@ def smoothsols(parmdb, ms, longbaseline):
     if noise < 0.07 and noise >= 0.04:
       cmdlosoto += create_losoto_mediumsmoothparset(ms, '3', longbaseline)#'/net/rijn/data2/rvweeren/LoTSS_ClusterCAL/losoto_mediansmooth_3x3.parset'
       smooth = True
-    print cmdlosoto
+    print(cmdlosoto)
     if smooth:
        os.system(cmdlosoto)
     return
@@ -998,7 +998,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
       if rotation:
         cmd += 'ac3.parmdb='+parmdb + ' ac3.type=applycal ac3.correction=rotation000 '
       
-      print 'DPPP applycal:', cmd
+      print('DPPP applycal:', cmd)
       os.system(cmd)
 
     # APPLYCAL CASE II
@@ -1007,7 +1007,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
       cmd += 'msout.datacolumn=CORRECTED_DATA steps=[ac1] msout.storagemanager=dysco '
       cmd += 'ac1.parmdb=phaseonly'+parmdb + ' ac1.type=applycal '
       cmd += 'ac1.correction=phase000 '
-      print 'DPPP applycal:', cmd
+      print('DPPP applycal:', cmd)
       os.system(cmd)
     
     # APPLYCAL CASE III  
@@ -1022,7 +1022,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
       cmd += 'ac1.correction=phase000 '
       cmd += 'ac2.parmdb=phaseonly'+parmdb + ' ac2.type=applycal '
       cmd += 'ac2.correction=tec000 '
-      print 'DPPP applycal:', cmd
+      print('DPPP applycal:', cmd)
       os.system(cmd)
 
 
@@ -1053,7 +1053,7 @@ def applycal(ms, parmdb, soltype, preapplyphase, TEC=False, rotation=False, pure
         cmd += 'ac3.parmdb='+parmdb + ' ac3.type=applycal ac3.correction=amplitude000 '
 
                     
-      print 'DPPP applycal:', cmd
+      print('DPPP applycal:', cmd)
       os.system(cmd) 
 
     return
@@ -1084,12 +1084,12 @@ def change_refant(parmdb, soltab):
     
 
       for antennaid,antenna in enumerate(antennas[1::]):
-            print antenna
+            print(antenna)
             idx0    = np.where((weights[:,:,antennaid+1,:,:] == 0.0))[0]
 
             idxnan  = np.where((~np.isfinite(phases[:,:,antennaid+1,:,:])))[0]
             
-            print idx0, idxnan, ((np.float(len(idx0))/np.float(np.size(weights[:,:,antennaid+1,:,:]))))
+            print(idx0, idxnan, ((np.float(len(idx0))/np.float(np.size(weights[:,:,antennaid+1,:,:])))))
             
             if  ((np.float(len(idx0))/np.float(np.size(weights[:,:,antennaid+1,:,:]))) < 0.5) and ((np.float(len(idxnan))/np.float(np.size(weights[:,:,antennaid+1,:,:]))) < 0.5):
               logging.info('Found new reference anntena,' + str(antenna))
@@ -1331,7 +1331,7 @@ def flaghighgamps(parmdb, highampval=10.,longbaseline=False):
     if not longbaseline: # no flagging
       weights_p[idx] = 0.0
     phases[idx] = 0.0
-    print idx
+    print(idx)
     H5.getSolset('sol000').getSoltab('phase000').setValues(weights_p,weight=True)
     H5.getSolset('sol000').getSoltab('phase000').setValues(phases)
     
@@ -1346,7 +1346,7 @@ def removenegativefrommodel(imagenames):
     replace negative pixel values in WSCLEAN model images with zeros
     '''
     for image in imagenames:
-        print 'remove negatives from model: ', image
+        print('remove negatives from model: ', image)
         hdul = fits.open(image)
         data = hdul[0].data
         
@@ -1395,7 +1395,7 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
         cmd += '-fits-mask '+ fitsmask + ' '
         #cmd += '-beam-shape 6arcsec 6arcsec 0deg ' 
       else:
-        print 'fitsmask: ', fitsmask, 'does not exist'
+        print('fitsmask: ', fitsmask, 'does not exist')
         sys.exit()
     if uvtaper:
        cmd += '-taper-gaussian 15arcsec '
@@ -1413,7 +1413,7 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
     
     cmd += '-name ' + imageout + ' -scale ' + pixsize + 'arcsec ' 
 
-    print 'WSCLEAN: ', cmd + '-niter ' + str(niter) + ' ' + msliststring
+    print('WSCLEAN: ', cmd + '-niter ' + str(niter) + ' ' + msliststring)
     logging.info(cmd + '-niter ' + str(niter) + ' ' + msliststring)
     os.system(cmd + '-niter ' + str(niter) + ' ' + msliststring)
 
@@ -1428,12 +1428,12 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
         cmdp += '-pol iquv '
       
       cmdp += '-name ' + imageout + ' -scale ' + pixsize + 'arcsec ' + msliststring
-      print 'PREDICT STEP for continue: ', cmdp
+      print('PREDICT STEP for continue: ', cmdp)
       os.system(cmdp)
        
       # NOW continue cleaning  
       cmd += '-niter ' + str(niter/5) + ' -multiscale -continue ' + msliststring
-      print 'WSCLEAN continue: ', cmd
+      print('WSCLEAN continue: ', cmd)
       os.system(cmd)
 
     # REMOVE nagetive model components, these are artifacts (only for Stokes I)
@@ -1451,7 +1451,7 @@ def makeimage(mslist, imageout, pixsize, imsize, channelsout, niter, robust, uvt
         cmd += '-pol iquv '
       
       cmd += '-name ' + imageout + ' -scale ' + pixsize + 'arcsec ' + msliststring
-      print 'PREDICT STEP: ', cmd
+      print('PREDICT STEP: ', cmd)
       os.system(cmd)
 
 
@@ -1470,7 +1470,7 @@ def runDPPPskymodel(ms, parmdb, skymodel, solint_phaseonly=2, nchan_phase=5,solt
         os.system('rm -rf ' + sourcedb)
     cmdmsdb = "makesourcedb in=" + skymodel + " "
     cmdmsdb += "out=" + sourcedb + " outtype='blob' format='<'"
-    print cmdmsdb
+    print(cmdmsdb)
     os.system(cmdmsdb)
     
 
@@ -1488,7 +1488,7 @@ def runDPPPskymodel(ms, parmdb, skymodel, solint_phaseonly=2, nchan_phase=5,solt
     cmd += 'gaincal.nchan=' + str(nchan_phase) + ' '
     cmd += 'gaincal.parmdb=' + parmdb + ' '
     cmd += 'gaincal.applysolution=True '
-    print cmd
+    print(cmd)
     os.system(cmd)
 
  
@@ -1518,14 +1518,14 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
 
     
     if os.path.isfile(parmdb):
-      print 'H5 file exists  ', parmdb
+      print('H5 file exists  ', parmdb)
       #os.system('rm -f ' + parmdb)
     if os.path.isfile('phaseonly' + parmdb) and preapplyphase == True:
-      print 'H5 file exists  ', 'phaseonly' + parmdb
+      print('H5 file exists  ', 'phaseonly' + parmdb)
       #os.system('rm -f ' + parmdb)
     
     if soltype == 'scalarphase' and preapplyphase == True:
-        print 'Not supported'
+        print('Not supported')
         sys.exit()
     
  
@@ -1592,7 +1592,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
         cmd += 'ddecal.h5parm=phaseonly' + parmdb + ' ' 
         
  
-    print 'DPPP solve:', cmd
+    print('DPPP solve:', cmd)
     os.system(cmd)
     #sys.exit()  
     if preapplyphase: # APPLY FIRST 
@@ -1602,7 +1602,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
           cmd += 'msout.datacolumn=CORRECTED_DATA_PHASE steps=[ac1] '
           cmd += 'ac1.parmdb=phaseonly'+parmdb + ' ac1.type=applycal '
           cmd += 'ac1.correction=phase000 '
-          print 'DPPP PRE-APPLY PHASE-ONLY:', cmd
+          print('DPPP PRE-APPLY PHASE-ONLY:', cmd)
           os.system(cmd)
           cmdlosotophase = losoto + ' '
           cmdlosotophase += 'phaseonly' + parmdb + ' ' + losotoparset_phase
@@ -1616,7 +1616,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
           cmd += 'ac1.correction=phase000 '
           cmd += 'ac2.parmdb=phaseonly'+parmdb + ' ac2.type=applycal '
           cmd += 'ac2.correction=tec000 '
-          print 'DPPP PRE-APPLY TECANDPHASE:', cmd
+          print('DPPP PRE-APPLY TECANDPHASE:', cmd)
           os.system(cmd)
           cmdlosotophase = losoto + ' '
           if puretec:            
@@ -1641,7 +1641,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
 
         if uvmin != 0:
            cmd += 'ddecal.uvlambdamin=' + str(uvmin) + ' '
-        print 'DPPP SLOW GAIN solve:', cmd
+        print('DPPP SLOW GAIN solve:', cmd)
         os.system(cmd)
         os.system('cp ' + parmdb + ' ' + parmdb + '.backup')
 
@@ -1762,26 +1762,26 @@ parser.add_argument('--genericpipeline', help='Specify if script is used inside 
 args = vars(parser.parse_args())
 #print args
 import os
-print 'Current working directory is' + os.getcwd()
-print 'Current real path is' + os.path.realpath('./')
-print 'Current directory contents:'
-print os.listdir('.')
-print 'Running directory contents:'
-print os.listdir(os.getcwd())
+print('Current working directory is' + os.getcwd())
+print('Current real path is' + os.path.realpath('./'))
+print('Current directory contents:')
+print(os.listdir('.'))
+print('Running directory contents:')
+print(os.listdir(os.getcwd()))
 if args['genericpipeline']:
     # Change directories, because files are in the working directory, but this is not where the script is executed.
     os.chdir(os.getcwd())
-print 'Current directory contents:'
-print os.listdir('.')
+print('Current directory contents:')
+print(os.listdir('.'))
 
 if args['skymodel'] != None:
   if not (os.path.isfile(args['skymodel'])):
-    print 'Cannot find skymodel, file does not exist'
+    print('Cannot find skymodel, file does not exist')
     sys.exit()
             
 
 if which('DPPP') == None:
-  print 'Cannot find DPPP, forgot to source lofarinit.[c]sh?'
+  print('Cannot find DPPP, forgot to source lofarinit.[c]sh?')
   sys.exit()
 
 
@@ -1791,10 +1791,10 @@ else:
    longbaseline = False
 
 if args['boxfile'] == None and args['imsize'] == None:
-  print 'Incomplete input detected, either boxfile or imsize is required'
+  print('Incomplete input detected, either boxfile or imsize is required')
   sys.exit()
 if args['boxfile'] != None and args['imsize'] != None:
-  print 'Wrong input detected, both boxfile and imsize are set'
+  print('Wrong input detected, both boxfile and imsize are set')
   sys.exit()
 
 
@@ -1807,8 +1807,8 @@ for ms_id, ms in enumerate(mslist):
    if args['genericpipeline']:
         mslist[ms_id] = mslist[ms_id].split('/')[-1]
 
-print 'mslist contains the following measurement sets:'
-print mslist
+print('mslist contains the following measurement sets:')
+print(mslist)
 
 if args['boxfile'] != None:
   imsize   = str(getimsize(args['boxfile'], args['pixelscale']))
@@ -1870,11 +1870,11 @@ else:
 
 for ms in mslist:
   if not os.path.isdir(ms):
-    print ms, ' does not exist'
+    print(ms, ' does not exist')
     sys.exit()
 
 if beamcor and idg:
-  print 'beamcor=True and IDG=True is not possible'
+  print('beamcor=True and IDG=True is not possible')
   sys.exit()
 
 if args['start'] == 0:
@@ -1947,7 +1947,7 @@ for i in range(args['start'],args['stop']):
 
   # create MODEL_DATA_BEAMCOR corrupted by the beam, to redetermine solints if requested
   if (i >= 1) and (i <= args['phasecycles']) and (args['usemodeldataforsolints']):
-    print 'Now recomputing solints .... '
+    print('Now recomputing solints .... ')
     for ms in mslist:
       beamcormodel(ms)
     nchan_phase,solint_phase,solint_ap,nchan_ap = determinesolintsMODELDATA(mslist, \
@@ -1977,7 +1977,7 @@ for i in range(args['start'],args['stop']):
 
   # NORMALIZE GLOBAL GAIN (done in log-space)
   if i >= args['phasecycles']:
-     print 'Doing global gain normalization'  
+     print('Doing global gain normalization'  )
      parmdblist = []  
      for msnumber, ms in enumerate(mslist):
        parmdblist.append(ms + parmdb + str(i) + '.h5')  
