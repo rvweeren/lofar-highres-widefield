@@ -14,8 +14,14 @@ import fnmatch
 from lofar.stationresponse import stationresponse
 
 def beamcor(ms):
-    """  
-    correct a ms for the beam in the phase center (array_factor only)
+    """ Correct a ms for the beam in the phase center (array_factor only).
+
+    Newer versions of DP3 support this natively and better. It is recommended to use that functionality instead of this if available.
+
+    Args:
+        ms (str): path to the measurement set to correct with array factor.
+    Returns:
+        None
     """
     losoto = 'losoto'
     taql = 'taql'
@@ -56,12 +62,14 @@ def beamcor(ms):
     beamdir['m0']['value'] = phasedir[0]
     beamdir['m1']['value'] = phasedir[1]
     t.putcolkeywords('DATA', {'LOFAR_APPLIED_BEAM_DIR': beamdir})
-    
-    return
 
 def create_beamcortemplate(ms):
-  """  
-  create a DPPP gain H5 template solutution file that can be filled with losoto
+  """ Create a DPPP gain H5 template solutution file that can be filled with losoto.
+
+  Args:
+    ms (str): path to the measurement set for which to create a template.
+  Returns:
+    H5name (str): name of the h5parm created.
   """
   H5name = ms + '_templatejones.h5'   
 
@@ -78,7 +86,13 @@ def create_beamcortemplate(ms):
   return H5name
 
 def fixbeam_ST001(H5name):
+  """ Replace beam corrections for the phased up station ST001 with correct corrections.
 
+  Args:
+    H5name (str): path to the h5parm containing the corrections.
+  Returns:
+    None
+  """
    H5 = h5parm.h5parm(H5name, readonly=False)
 
    ants = H5.getSolset('sol000').getAnt().keys()
@@ -92,19 +106,6 @@ def fixbeam_ST001(H5name):
 
      idx = np.where(amps[1]['ant'] == 'ST001')[0][0]
      idxrs = np.where(amps[1]['ant'] == antsrs[0])[0][0]
-     #idx106 = np.where(amps[1]['ant'] == 'RS106HBA')[0][0]
-     #idx305 = np.where(amps[1]['ant'] == 'RS305HBA')[0][0]
-     #idx508 = np.where(amps[1]['ant'] == 'RS508HBA')[0][0]
-     #idx406 = np.where(amps[1]['ant'] == 'RS406HBA')[0][0]
-     #idxnonecheck = np.where(amps[1]['ant'] == 'blaHBA')[0][0]
-
-     #print idx205
-     #print '$$$$$$$$$$$$$$$$$$$$$$$$'
-     #print '$$$$$$$$$$$$$$$$$$$$$$$$'
-     #print '$$$$$$$$$$$$$$$$$$$$$$$$'
-
-     #ampvals[:,:, idx, 0,:] = 1.0  # set amplitude to 1.
-     #phasevals[:,:, idx, 0,:] = 0.0 # set phase to 0.
 
      ampvals[:,:, idx, 0,:] = ampvals[:,:, idxrs, 0,:]
      phasevals[:,:, idx, 0,:] = 0.0
@@ -114,11 +115,13 @@ def fixbeam_ST001(H5name):
 
    H5.close()
 
-   return
-
 def create_losoto_beamcorparset(ms):
-    """  
-    Create a losoto parset to fill the beam correction values'.
+    """ Create a losoto parset to fill the beam correction values'.
+
+    Args:
+        ms (str): name of the measurement set to correct.
+    Returns:
+        parset (str): name of the parset created.
     """
     parset = 'losotobeam.parset'
     os.system('rm -f ' + parset)
@@ -155,8 +158,15 @@ def create_losoto_beamcorparset(ms):
     return parset
 
 def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=True, useArrayFactor=True, useChanFreq=True):
-    """
-    Do the beam correction via this imported losoto operation
+    """ Do the beam correction via this imported losoto operation
+
+    Args:
+        parmdb (str): name of the h5parm to work on.
+        soltabname (str): name of the soltab to operate on.
+        inverse (bool): apply the inverse beam correction.
+        useElementResponse (bool): apply the element beam correction.
+        useArrayFactor (bool): apply the array factor correction.
+        useChanFreq (bool): operate per channel.
     """
 
     H5 = h5parm.h5parm(parmdb, readonly=False)
@@ -193,7 +203,6 @@ def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=Tr
         soltab.setValues(vals, selection)
 
     H5.close()
-    return
 
 if __name__ == '__main__':
     msin = sys.argv[1]
