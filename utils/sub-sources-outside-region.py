@@ -237,7 +237,7 @@ def flatten(f):
 
     naxis=f[0].header['NAXIS']
     if naxis<2:
-        raise RadioError('Can\'t make map from this')
+        raise ValueError('Can\'t make map from this')
     if naxis==2:
         return fits.PrimaryHDU(header=f[0].header,data=f[0].data)
 

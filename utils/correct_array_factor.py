@@ -86,13 +86,13 @@ def create_beamcortemplate(ms):
   return H5name
 
 def fixbeam_ST001(H5name):
-  """ Replace beam corrections for the phased up station ST001 with correct corrections.
+   """ Replace beam corrections for the phased up station ST001 with correct corrections.
 
-  Args:
-    H5name (str): path to the h5parm containing the corrections.
-  Returns:
-    None
-  """
+   Args:
+      H5name (str): path to the h5parm containing the corrections.
+   Returns:
+      None
+   """
    H5 = h5parm.h5parm(H5name, readonly=False)
 
    ants = H5.getSolset('sol000').getAnt().keys()
