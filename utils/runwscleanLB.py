@@ -1661,7 +1661,7 @@ def runDPPP(ms, solint_ap, solint_phaseonly, nchan_phase, nchan_ap, parmdb, solt
       change_refant(parmdb,'phase000')
       removenans(parmdb, 'amplitude000')
       removenans(parmdb, 'phase000')
-      if rotation:
+      if soltype=='rotation+diagonal':
         removenans(parmdb, 'rotation000')
       # FLAG/SMOOTH solutions
       os.system(cmdlosoto)
