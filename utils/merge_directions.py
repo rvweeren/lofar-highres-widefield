@@ -1,6 +1,5 @@
 import argparse
 import glob
-import sys
 
 from losoto.lib_operations import reorderAxes
 from scipy.interpolate import interp1d
@@ -31,22 +30,15 @@ parser.add_argument('--append-to-solset', dest='append_to_solset', default='', h
 args = parser.parse_args()
 convert_tec = args.convert_tec
 
-
-
-if args.ms == None:
-  mslist = sorted(glob.glob(args.msdir + '/*.' + args.mssuffix))
-  ms_first = mslist[0]
-  ms_last = mslist[-1]
+if args.ms is None:
+    mslist = sorted(glob.glob(args.msdir + '/*.' + args.mssuffix))
+    ms_first = mslist[0]
+    ms_last = mslist[-1]
 else:
-  ms_first = args.ms
-  ms_last  = args.ms
+    ms_first = args.ms
+    ms_last = args.ms
 
-#if args.h5parmsglob != None:
-#  h5list = glob.glob(args.h5parmsglob)
-#else:
-h5list = args.h5parms  
-
-#print  (args.h5parms  )
+h5list = args.h5parms
 
 print('Determining time axis...')
 len_time_old = 0
@@ -97,7 +89,6 @@ if args.takefreqfromms:
     ff.close()
     print(ax_freq_ms)
 
-         
 if 'amplitude' in args.soltab2merge:
     print('Determining frequency grid...')
     len_freq_old = 0
@@ -113,10 +104,10 @@ if 'amplitude' in args.soltab2merge:
             len_freq_old = len(ax_freq)
             name_freq = ih5
         fh5.close()
-    if args.takefreqfromms: 
-      ax_freq = ax_freq_ms
-    else:    
-      print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1] - ax_freq[0]))
+    if args.takefreqfromms:
+        ax_freq = ax_freq_ms
+    else:
+        print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1] - ax_freq[0]))
     if 'pol' in axes_new:
         gains = np.ones((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
     else:
@@ -132,14 +123,14 @@ elif 'phase' in args.soltab2merge:
             st = ss.getSoltab('tec000')
         elif 'phase000' in ss.getSoltabNames():
             st = ss.getSoltab('phase000')
-        ax_freq_temp = st.getAxisValues('freq')  
+        ax_freq_temp = st.getAxisValues('freq')
         if len(ax_freq_temp) > len_freq_old:
             # Longer freq axis meas a shorter solution interval was used.
             ax_freq = ax_freq_temp
             len_freq_old = len(ax_freq)
             name_freq = ih5
         fh5.close()
-    if args.takefreqfromms:    
+    if args.takefreqfromms:
         ax_freq = ax_freq_ms
     else:
         print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1] - ax_freq[0]))
@@ -157,14 +148,12 @@ elif convert_tec and 'tec' in args.soltab2merge:
     fl = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_last + '::SPECTRAL_WINDOW')
     freq_last = np.max(fl.getcol('CHAN_FREQ'))
     if not args.takefreqfromms:
-      print(freq_first, freq_last, freq_spacing)
+        print(freq_first, freq_last, freq_spacing)
     ax_freq = np.arange(freq_first, freq_last + freq_spacing, freq_spacing)
     phases = np.zeros((1, 1, len(antennas), len(ax_freq), len(ax_time)))
     print('Frequency axis taken Measurement Sets with a solution interval of {:f} Hz.'.format(ax_freq[1] - ax_freq[0]))
 elif not convert_tec:
     phases = np.zeros(vals_reordered.shape)
-
-
 
 h5out = h5parm.h5parm(args.h5out, readonly=False)
 if args.append_to_solset:
@@ -234,29 +223,20 @@ for i, h5 in enumerate(h5list):
     elif st.getType() == 'phase':
         phase_tmp = st.getValues()[0]
         phase = reorderAxes(phase_tmp, st.getAxesNames(), axes_new)
-        tp = interp_along_axis(phase, st.getAxisValues('time'), ax_time, -1) 
+        tp = interp_along_axis(phase, st.getAxisValues('time'), ax_time, -1)
         if tp.shape[-2] == 1:
-          print('Only 1 freq axis, scipy interpol1d does not like that, do an append to extend to', len(ax_freq))
-          for ff in ax_freq[:-1]:
-            tp = np.append(tp, phase, axis=-2)
-            #print (tp.shape)  
+            print('Only 1 freq axis, scipy interpol1d does not like that, do an append to extend to', len(ax_freq))
+            for ff in ax_freq[:-1]:
+                tp = np.append(tp, phase, axis=-2)
         else:
-          tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
-        # tp = tp.reshape(tp.shape[0], -1, *tp.shape[1:])
+            tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
         # Now add the phases to the total phase correction for this direction.
-        
-        #print (tp.shape)
-        #print (phases.shape)
-        #print axes_new
-        #sys.exit()
-        #print (phases.shape, phases[:, idx, :, :, :].shape)
         if idx == 0:
             if 'dir' in axes_new:
-                #print 'here', axes_new
                 if 'pol' in axes_new:
-                   phases[:, idx, :, :, :] += tp[:, 0, ...]
+                    phases[:, idx, :, :, :] += tp[:, 0, ...]
                 else:
-                   phases[idx, :, :, :] += tp[0, ...] 
+                    phases[idx, :, :, :] += tp[0, ...]
             else:
                 phases += tp
         else:
@@ -270,17 +250,17 @@ for i, h5 in enumerate(h5list):
         amp = reorderAxes(amp_tmp, st.getAxesNames(), axes_new)
         tp = interp_along_axis(amp, st.getAxisValues('time'), ax_time, -1)
         if tp.shape[-2] == 1:
-          print('Only 1 freq axis, scipy interpol1d does not like that, do an append to extend to', len(ax_freq))
-          for ff in ax_freq[:-1]:
-            tp = np.append(tp, amp, axis=-2)        
+            print('Only 1 freq axis, scipy interpol1d does not like that, do an append to extend to', len(ax_freq))
+            for ff in ax_freq[:-1]:
+                tp = np.append(tp, amp, axis=-2)
         else:
-           tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
+            tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
         if idx == 0:
             if 'dir' in axes_new:
                 if 'pol' in axes_new:
-                   gains[:, idx, :, :, :] *= tp[:, 0, ...]
+                    gains[:, idx, :, :, :] *= tp[:, 0, ...]
                 else:
-                   gains[idx, :, :, :] *= tp[0, ...] 
+                    gains[idx, :, :, :] *= tp[0, ...]
             else:
                 gains *= tp
         else:

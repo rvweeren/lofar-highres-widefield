@@ -1,17 +1,14 @@
 #!/usr/bin/env python
-from astropy import units as u
-from astropy.coordinates import SkyCoord
-from astropy.io import ascii,fits
+from astropy.io import ascii
 from astropy.table import Table
-from scipy.spatial.distance import pdist, squareform
-from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+from scipy.spatial.distance import pdist
+from scipy.cluster.hierarchy import linkage, fcluster
 
 
 import ast
-import glob
 
-import astropy.table as table
 import numpy as np
+
 
 def find_candidates(cat, fluxcut=25e-3):
     ''' Identify candidate sources for DDE calibration.
@@ -32,7 +29,6 @@ def find_candidates(cat, fluxcut=25e-3):
     sub_tab = tab[tab['Peak_flux'] > fluxcut]
     sub_tab.rename_column('RA', 'LOTSS_RA')
     sub_tab.rename_column('DEC', 'LOTSS_DEC')
-    #return candidates
 
     # In case of multiple components of a single source being found, calculate the mean position.
     candidates = Table(names=['Source_id', 'RA', 'DEC'])
@@ -41,11 +37,10 @@ def find_candidates(cat, fluxcut=25e-3):
 
     # Make an (N,2) array of directions and compute the distances between points.
     pos = np.stack((list(sub_tab['LOTSS_RA']), list(sub_tab['LOTSS_DEC'])), axis=1)
-    distances = pdist(pos, 'euclidean')
 
     # Cluster components based on the distance between them.
     Z = linkage(pos, method='complete', metric='euclidean')
-    clusters = fcluster(Z, 2*60. / 3600., criterion='distance')
+    clusters = fcluster(Z, 1 * 60. / 3600., criterion='distance')
 
     # Loop over the clusters and merge them into single directions.
     for c in np.unique(clusters):
@@ -64,7 +59,8 @@ def find_candidates(cat, fluxcut=25e-3):
             else:
                 print('Direction {:d} has been merged already.\n'.format(sub_tab['Source_id'][i]))
     return candidates
-    
+
+
 def make_parset(candidates, sols_phase=None, solset_phase='sol000', sols_amp=None, solset_amp='sol000', prefix=''):
     ''' Create a DPPP ready parset for phaseshifting towards the sources.
 
@@ -92,8 +88,8 @@ steps=[explode]
     elif (sols_phase is None) and (sols_amp is None):
         parset += '''explode.steps=[shift,avg1,adder,filter,averager,msout]
 '''
-        
-    parset += '''explode.replaceparms = [shift.phasecenter, msout.name]        
+
+    parset += '''explode.replaceparms = [shift.phasecenter, msout.name]
 
 shift.type=phaseshift
 
@@ -133,6 +129,7 @@ msout.overwrite = True
     parset += 'shift.phasecenter=[' + ','.join(list(map(lambda x: '[{:f}deg,{:f}deg]'.format(x[0], x[1]), candidates['RA', 'DEC']))) + ']\n'
     return parset
 
+
 if __name__ == '__main__':
     import argparse
 
@@ -155,7 +152,7 @@ if __name__ == '__main__':
     if ast.literal_eval(args.writepset):
         Nchunks = (len(candidates) // 20) + 1
         for i in xrange(Nchunks):
-            candidate_chunk = candidates[10*i:10*(i+1)]
+            candidate_chunk = candidates[10 * i:10 * (i + 1)]
             if args.sols_phase:
                 parset = make_parset(candidate_chunk, sols_phase=args.sols_phase, solset_phase=args.ss_phase, prefix=args.prefix)
                 if args.sols_amp:

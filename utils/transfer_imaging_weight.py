@@ -4,6 +4,7 @@ import sys
 
 import casacore.tables as ct
 
+
 def main(ms):
     ''' Transfers a taper made with WSClean to IMAGING_WEIGTH such that it can be used in DDFacet.
 
@@ -40,6 +41,7 @@ def main(ms):
     print('Writing taper to IMAGING_WEIGHT')
     tab.putcol('IMAGING_WEIGHT', iw)
     print('Taper written to IMAGING_WEIGHT')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
