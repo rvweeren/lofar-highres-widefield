@@ -250,7 +250,7 @@ RA = np.asarray(RA)
 DEC = np.asarray(DEC)
 
 # Inspired by https://stackoverflow.com/questions/38309535/populate-numpy-array-through-concurrent-futures-multiprocessing
-data_int = np.ones(data.shape)
+data_int = np.ones(data.shape,  dtype=np.float32)
 print('Making TEC screen.')
 for ifreq in range(data.shape[1]):
     print('Processing frequency slot {:d}'.format(ifreq))
