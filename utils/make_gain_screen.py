@@ -44,6 +44,9 @@ t.close()
 t = ct.taql('SELECT REFERENCE_DIR FROM {ms:s}::FIELD'.format(ms=ms))
 phasecenter = t.getcol('REFERENCE_DIR').squeeze()
 print(phasecenter)
+if np.rad2deg(phasecenter[0]) < 0: # avoid negative CRVAL1
+   phasecenter[0] = phasecenter[0] + (2.*np.pi)       
+
 t.close()
 # Time is stored as MJD, convert from seconds to days here as that's what FITS wants.
 #t = ct.taql('SELECT DISTINCT TIME FROM {ms:s}'.format(ms=ms))
