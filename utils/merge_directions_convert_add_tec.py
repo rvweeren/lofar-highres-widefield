@@ -20,7 +20,7 @@ def interp_along_axis(x, interp_from, interp_to, axis):
 
 def natural_sort( l ):
     convert = lambda text: int(text) if text.isdigit() else text.lower()
-    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
     return sorted(l, key = alphanum_key)
 
 
@@ -31,10 +31,10 @@ def get_new_axes( mysoltab ):
     myaxnames = mysoltab.getAxesNames()
     if 'dir' in myaxnames:
         axes_new = ['dir'] + axes_new
-	axes_vals = [mysoltab.dir] + axes_vals
+        axes_vals = [mysoltab.dir] + axes_vals
     if 'pol' in myaxnames:
         axes_new = ['pol'] + axes_new
-	axes_vals = [mysoltab.pol] + axes_vals
+        axes_vals = [mysoltab.pol] + axes_vals
     return( axes_new, axes_vals )
 
 def main( mspath='', mssuffix='', h5parms='', soltabs2merge='phase,tec,amplitude', solsetin='sol000', h5out_name='', append_to_solset=None ):
@@ -44,11 +44,11 @@ def main( mspath='', mssuffix='', h5parms='', soltabs2merge='phase,tec,amplitude
     soltabs = soltabs2merge.split(',')
     ordered_idx = []
     if 'phase' in soltabs:
-	phs_idx = [ xx for xx in np.arange(len(soltabs)) if soltabs[xx] == 'phase' ]
-	ordered_idx += phs_idx
-	if 'tec' in soltabs:
-	    tec_idx = [ xx for xx in np.arange(len(soltabs)) if soltabs[xx] == 'tec' ]
-	    ordered_idx += tec_idx	
+        phs_idx = [ xx for xx in np.arange(len(soltabs)) if soltabs[xx] == 'phase' ]
+        ordered_idx += phs_idx
+        if 'tec' in soltabs:
+            tec_idx = [ xx for xx in np.arange(len(soltabs)) if soltabs[xx] == 'tec' ]
+            ordered_idx += tec_idx
     index = [ xx for xx in np.arange(len(soltabs)) if xx not in ordered_idx ]
     ordered_idx += index
     soltabs = np.array(soltabs)[ordered_idx].tolist()
@@ -88,11 +88,11 @@ def main( mspath='', mssuffix='', h5parms='', soltabs2merge='phase,tec,amplitude
     maxt = []
     tint = []
     for myst in soltab_names:
-	tmp = ss.getSoltab(myst)
-	times = tmp.time
-	mint.append(np.min(times))
-	maxt.append(np.max(times))
-	tint.append(times[1]-times[0])
+        tmp = ss.getSoltab(myst)
+        times = tmp.time
+        mint.append(np.min(times))
+        maxt.append(np.max(times))
+        tint.append(times[1]-times[0])
     smallest_idx = np.where(tint == np.min(tint))[0][0]
     ax_time = np.arange( mint[smallest_idx], maxt[smallest_idx]+tint[smallest_idx], tint[smallest_idx] )
     h5.close()
@@ -115,10 +115,10 @@ def main( mspath='', mssuffix='', h5parms='', soltabs2merge='phase,tec,amplitude
     phases = np.zeros((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
     phs_axes, phs_axes_vals = get_new_axes( st )
     if 'amplitude000' in soltabs:
-	amps = np.ones((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
-	st = ss.getSoltab('amplitude000')
-	vals= st.getValues()[0]
-	amp_axes, amp_axes_vals = get_new_axes( st )
+        amps = np.ones((len(polarizations), 1, len(antennas), len(ax_freq), len(ax_time)))
+        st = ss.getSoltab('amplitude000')
+        vals= st.getValues()[0]
+        amp_axes, amp_axes_vals = get_new_axes( st )
 
     ## antenna information
     antennas = st.getAxisValues('ant')
@@ -160,56 +160,56 @@ def main( mspath='', mssuffix='', h5parms='', soltabs2merge='phase,tec,amplitude
             idx = directions.index(d)
             d = 'Dir{:02d}'.format(idx)
 
-	## start looping through soltabs
-	for soltab in soltabs:
-	    st = ss.getSoltab(soltab)
-	    tmp_vals = st.getValues()[0]
-	    axes_new, axes_vals = get_new_axes( st )
-	    vals = reorderAxes( tmp_vals, st.getAxesNames(), axes_new )
-	    ## add phases to the total phase correction for this direction:
-	    if soltab == 'phase000':
-		## interpolate in time and frequency
+        ## start looping through soltabs
+        for soltab in soltabs:
+            st = ss.getSoltab(soltab)
+            tmp_vals = st.getValues()[0]
+            axes_new, axes_vals = get_new_axes( st )
+            vals = reorderAxes( tmp_vals, st.getAxesNames(), axes_new )
+            ## add phases to the total phase correction for this direction:
+            if soltab == 'phase000':
+                ## interpolate in time and frequency
                 tmp_vals = interp_along_axis( vals, st.getAxisValues('time'), ax_time, -1 )
                 vals = interp_along_axis( tmp_vals, st.getAxisValues('freq'), ax_freq, -2 )
-		## note that phase should have polarisation information
-		if 'dir' in axes_new:
-		    ## append if idx > len(phases)
-		    if idx == 0:
-			phases[ :, idx, :, :, :] += vals[0, ...]
-		    else:
-		        phases = np.append(phases, vals, axis=1)
-		else:
-		    if idx == 0:
-			phases[ :, idx, :, :, :] += vals
-		    else:
-			phases = np.append(phases, vals, axis=1)
+                ## note that phase should have polarisation information
+                if 'dir' in axes_new:
+                    ## append if idx > len(phases)
+                    if idx == 0:
+                        phases[ :, idx, :, :, :] += vals[0, ...]
+                    else:
+                        phases = np.append(phases, vals, axis=1)
+                else:
+                    if idx == 0:
+                        phases[ :, idx, :, :, :] += vals
+                    else:
+                        phases = np.append(phases, vals, axis=1)
             elif soltab == 'tec000':
-		freqs = ax_freq.reshape(1,1,1,-1,1)
-		tecphase = (-8.4479745e9 * vals / freqs)
-		tp = interp_along_axis( tecphase, st.getAxisValues('time'), ax_time, -1)
-		if 'pol' in phs_axes:
-		    polidx = np.arange(len(polarizations))
-		else:
-		    polidx = 0
+                freqs = ax_freq.reshape(1,1,1,-1,1)
+                tecphase = (-8.4479745e9 * vals / freqs)
+                tp = interp_along_axis( tecphase, st.getAxisValues('time'), ax_time, -1)
+                if 'pol' in phs_axes:
+                    polidx = np.arange(len(polarizations))
+                else:
+                    polidx = 0
                 if 'dir' in axes_new:
                     phases[ polidx, idx, :, :, :] += tp[0, ...]
                 else:
                     phases[ polidx, idx, :, :, :] += tp
-	    elif soltab == 'amplitude000':
+            elif soltab == 'amplitude000':
                 tmp_vals = interp_along_axis( vals, st.getAxisValues('time'), ax_time, -1 )
                 vals = interp_along_axis( tmp_vals, st.getAxisValues('freq'), ax_freq, -2 )
-		if 'dir' in axes_new:
-		    if idx == 0:
-			amps[ :, idx, :, :, :] += vals[0, ...]
-		    else:
-			amps = np.append( amps, vals, axis=1 )	
-		else:
-		    if idx == 0:
-			amps[ :, idx, :, :, :] *= vals
-		    else:
-			amps = np.append( amps, vals, axis=1)
-	h5.close()
-		
+                if 'dir' in axes_new:
+                    if idx == 0:
+                        amps[ :, idx, :, :, :] += vals[0, ...]
+                    else:
+                        amps = np.append( amps, vals, axis=1 )
+                else:
+                    if idx == 0:
+                        amps[ :, idx, :, :, :] *= vals
+                    else:
+                        amps = np.append( amps, vals, axis=1)
+        h5.close()
+
     # Create the output h5parm.
     ## phases first
     weights = np.ones(phases.shape)
@@ -224,6 +224,7 @@ def main( mspath='', mssuffix='', h5parms='', soltabs2merge='phase,tec,amplitude
     print( 'done.' )
     return
 
+
 if __name__ == "__main__":
 
     parser =argparse.ArgumentParser()
@@ -237,4 +238,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(  mspath=args.mspath, mssuffix=args.mssuffix, h5parms=args.h5parms, soltabs2merge=args.soltabs2merge, solsetin=args.solsetin, h5out_name=args.h5out, append_to_solset=args.append_to_solset )
-
