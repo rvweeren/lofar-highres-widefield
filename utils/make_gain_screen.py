@@ -1,14 +1,10 @@
-from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
 from losoto.lib_operations import reorderAxes
-from matplotlib.pyplot import figure, show
-from scipy import ndimage
+from matplotlib.pyplot import figure
 from scipy.interpolate import Rbf
-from scipy.signal import medfilt
 from tqdm import tqdm
 
-import cPickle as pickle
 import casacore.tables as ct
 import losoto.h5parm as h5parm
 import matplotlib.pyplot as plt
@@ -18,12 +14,12 @@ import sys
 
 
 def plot_screen(img, prefix='', title='', suffix='', wcs=None):
-    fig = figure(figsize=(12,12))
+    fig = figure(figsize=(12, 12))
     if wcs is not None:
         ax = fig.add_subplot(111, projection=wcs)
     else:
         ax = fig.add_subplot(111, projection=wcs)
-    
+
     ax.set_title(title)
     ax.set_xlabel('RA')
     ax.set_ylabel('DEC')
@@ -44,32 +40,27 @@ t.close()
 t = ct.taql('SELECT REFERENCE_DIR FROM {ms:s}::FIELD'.format(ms=ms))
 phasecenter = t.getcol('REFERENCE_DIR').squeeze()
 print(phasecenter)
-if np.rad2deg(phasecenter[0]) < 0: # avoid negative CRVAL1
-   phasecenter[0] = phasecenter[0] + (2.*np.pi)       
+# Avoid negative CRVAL1
+if np.rad2deg(phasecenter[0]) < 0:
+    phasecenter[0] = phasecenter[0] + (2. * np.pi)
 
 t.close()
-# Time is stored as MJD, convert from seconds to days here as that's what FITS wants.
-#t = ct.taql('SELECT DISTINCT TIME FROM {ms:s}'.format(ms=ms))
-#time = t.getcol('TIME')
-#stime = time[0] 
-#dtime = (time[1] - time[0]) / (24. * 60 * 60)
-#dtime = 60.
-#t.close()
 h5 = h5parm.h5parm(h5p)
 ss = h5.getSolset('sol000')
 st = ss.getSoltab('amplitude000')
 time = st.getAxisValues('time')
-stime = time[0] 
+stime = time[0]
 dtime = time[1] - time[0]
 freq = st.getAxisValues('freq')
 sfreq = freq[0]
 dfreq = freq[1] - freq[0]
 
 Nantenna = len(names)
-Ntimes = len(time) # 60s timeslots for an 8 hour pointing
+# 60s timeslots for an 8 hour pointing
+Ntimes = len(time)
 Nfreqs = len(freq)
 # Set the frequency axis (that TEC doens't use) to 150 MHz as central frequency with 50 MHz of bandwidth.
-header='''SIMPLE  =                    T / file does conform to FITS standard
+header = '''SIMPLE  =                    T / file does conform to FITS standard
 BITPIX  =                  -32 / number of bits per data pixel
 NAXIS   =                    6 / number of data axes
 NAXIS1  =                 256 / length of RA axis
@@ -134,7 +125,7 @@ for d in directions:
     RAd, DECd = np.rad2deg(c)
     RA.append(RAd)
     DEC.append(DECd)
-    c = wcs.wcs_world2pix(RAd,DECd,0)
+    c = wcs.wcs_world2pix(RAd, DECd, 0)
     print('Direction {:s} is at pixel coordinates {:f},{:f}'.format(d, float(c[0]), float(c[1])))
 
     print('Adding direction {:s} at {:f},{:f}'.format(d, RAd, DECd))
@@ -176,27 +167,19 @@ hdu.data = data
 hdu.writeto('gainscreen_raw.fits', overwrite=True)
 RA = np.asarray(RA)
 DEC = np.asarray(DEC)
+
+
 # Interpolate the grid using a nearest neighbour approach.
 # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
-
-import concurrent.futures
-from itertools import izip
-
-#def interpolate_station(antidx, interpidx, x_from, y_from, tecs, x_to, y_to):
-def interpolate_station(antname,ifstep):
-    #print('Processing antenna {:s}.'.format(antname))
-    refidx = h5_stations.index('ST001')
+def interpolate_station(antname, ifstep):
+    # print('Processing antenna {:s}.'.format(antname))
     if 'CS' in antname:
         # Take ST001 solutions.
         interpidx = h5_stations.index('ST001')
     else:
         interpidx = h5_stations.index(antname)
     # These will be the new coordinates to evaluate the screen over.
-    ra_max, ra_min = wcs.wcs_pix2world(0, 0, 0)[0], wcs.wcs_pix2world(255, 255, 0)[0]
-    dec_min, dec_max = wcs.wcs_pix2world(0, 0, 0)[1], wcs.wcs_pix2world(255, 255, 0)[1]
     size = 256
-    #y = np.linspace(dec_min, dec_max, size)
-    #x = np.linspace(ra_min, ra_max, size) * np.cos(phasecenter[1])
     x = np.arange(size)
     y = np.arange(size)
     xx, yy = np.meshgrid(x, y)
@@ -204,7 +187,6 @@ def interpolate_station(antname,ifstep):
     # First axis of data is time.
     screen = np.ones((data.shape[0], 1, 1, 4, 256, 256))
     X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
-    #print(screen.shape)
     # data has shape (time, freq, ant, matrix, y, x)
     # gains has shape (time, freq, ant, dir, pol)
     # Iterate over all timeslots.
@@ -214,28 +196,14 @@ def interpolate_station(antname,ifstep):
         gYY = gains[itstep, ifstep, interpidx, :, -1]
         rbfXX = Rbf(X, Y, gXX, smooth=0.0)
         rbfYY = Rbf(X, Y, gYY, smooth=0.0)
-        '''
-        if ('CS' not in antname) and ('RS' not in antname):
-            print('== bla ==')
-            for i, (rr,dd) in enumerate(zip(RA,DEC)):
-                print(rr)
-                print(dd)
-                orig = tstep[interpidx][i]
-                interp = rbf(rr, dd)
-                print('Difference TEC and Rbf: {:e}'.format(orig - interp))
-                print('== end bla ==')
-        '''
         tinterpXX = rbfXX(xx, yy)
         tinterpYY = rbfYY(xx, yy)
-        #print(tinterpXX.shape)
-        #print(tinterpYY.shape)
         if not np.allclose(tinterpXX[Y, X], gXX, rtol=1e-5):
             raise ValueError('Interpolated screen for polarization XX does not go through nodal points.')
         if not np.allclose(tinterpYY[Y, X], gYY, rtol=1e-5):
             raise ValueError('Interpolated screen for polarization YY does not go through nodal points.')
         del gXX, gYY
         matrix = np.asarray([np.real(tinterpXX), np.imag(tinterpXX), np.real(tinterpYY), np.imag(tinterpYY)])
-        #print(matrix.shape)
         screen[itstep, 0, 0, :, :, :] = matrix
     '''
     didx = directions.index('P470')
@@ -271,46 +239,17 @@ def interpolate_station(antname,ifstep):
     '''
     return names.index(antname), screen
 
-def dummyfunc(args):
-    print(args)
-    results = interpolate_station(args[0], args[1])
-    return results
 
 # Inspired by https://stackoverflow.com/questions/38309535/populate-numpy-array-through-concurrent-futures-multiprocessing
 data_int = np.ones(data.shape)
 print('Making TEC screen.')
-# Loop over antennas. Much faster than interpolating an NxNxNantx1xNtime array.
-#for i, a in enumerate(names):
-    #if 'CS' in a:
-        # Take ST001 solutions.
-    #    idx = -1
-    #print('Processing antenna {:s}'.format(a))
-    #adata = data[:, :, i, :, :]
-    #invalid_cell_mask = np.where(adata == 0, 1, 0)
-    #indices = ndimage.distance_transform_edt(invalid_cell_mask, return_distances=False, return_indices=True)
-    #data_int[:, :, i, :, :] = adata[tuple(indices)]
-'''
-for ifreq in range(Nfreqs):
-    print('Processing frequency slot {:d}'.format(ifreq))
-    print([(name, ifreq) for name in names])
-    args = [(name, ifreq) for name in names]
-    with concurrent.futures.ProcessPoolExecutor(1) as executor: 
-        for antenna, screen in executor.map(dummyfunc, args):
-            data_int[:, freq, antenna, :, :, :] = screen
-'''
 for ifreq in range(data.shape[1]):
     print('Processing frequency slot {:d}'.format(ifreq))
     for station in tqdm(names):
         antenna, screen = interpolate_station(station, ifreq)
-        #print('Screen: ', screen.shape)
-        #print('data_int: ', data_int.shape)
         data_int[:, ifreq, antenna, :, :, :] = screen[:, 0, 0, ...]
-    
 
-#sys.exit(0)
 hdu = fits.PrimaryHDU(header=H)
 hdu.data = data_int
-#hdu.writeto('test_50mJy_oldsolint_outrej_dejumped_rbf_smooth0.01_res0.2_refST001_tecscreen_interpolated.fits')
 hdu.writeto('gainscreen_rbf.fits')
 print('Finished interpolating.')
-
