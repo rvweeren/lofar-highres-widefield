@@ -30,6 +30,90 @@ def plot_screen(img, prefix='', title='', suffix='', wcs=None):
     del fig
 
 
+def interpolate_station(antname):
+    ''' Interpolate the solutions of a given antenna into a smooth screen using radial basis function interpolation.
+
+    Args:
+        antname (str): name of the antenna to interpolate.
+
+    Returns:
+        antindex (int): index of the antenna being processed.
+        screen (ndarray): numpy ndarray containing the interpolated screen.
+    '''
+    print('Processing antenna {:s}.'.format(antname))
+    refidx = h5_stations.index('ST001')
+    if 'CS' in antname:
+        # Take ST001 solutions.
+        interpidx = h5_stations.index('ST001')
+    else:
+        interpidx = h5_stations.index(antname)
+    # These will be the new coordinates to evaluate the screen over.
+    size = 256
+    # Do the interpolation in pixel space.
+    x = np.arange(size)
+    y = np.arange(size)
+    xx, yy = np.meshgrid(x, y)
+    # Do radial basis function interpolation for each time step.
+    screen = np.zeros((TEC.shape[-1], 256, 256))
+    # Iterate over all timeslots.
+    for itstep in range(TEC.shape[-1]):
+        X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
+        tecs = TEC[:, interpidx, itstep] - TEC[:, refidx, itstep]
+        rbf = Rbf(X, Y, tecs, smooth=0.0)
+        '''
+        if ('CS' not in antname) and ('RS' not in antname):
+            print('== bla ==')
+            for i, (rr,dd) in enumerate(zip(RA,DEC)):
+                print(rr)
+                print(dd)
+                orig = tstep[interpidx][i]
+                interp = rbf(rr, dd)
+                print('Difference TEC and Rbf: {:e}'.format(orig - interp))
+                print('== end bla ==')
+        '''
+        tinterp = rbf(xx, yy)
+        if not np.allclose(tinterp[Y, X], tecs, rtol=1e-5):
+            raise ValueError('Interpolated screen does not go through nodal points.')
+        screen[itstep, :, :] = tinterp
+    '''
+    didx = directions.index('P470')
+    print(didx)
+    print(tecs.shape)
+    print(X[didx], Y[didx])
+    print(screen[:, 136, 129].shape)
+    fig = figure()
+    fig.suptitle(antname)
+    ax = fig.add_subplot(111)
+    ax.plot(TEC[didx, interpidx, :] - TEC[didx, refidx, :], 'C0h--', label='H5parm', markersize=12)
+    ax.plot(screen[:, 136, 129], 'C1h--', label='Rbf Interp. Y,X')
+    ax.plot(screen[:, 129, 136], 'C2h--', label='Rbf Interp. X,Y')
+    ax.legend()
+    ax.set_xlabel('Time'); ax.set_ylabel('dTEC')
+    show()
+    del fig
+    if ('CS' not in antname) and ('RS' not in antname):
+        print('== bla ==')
+        for i, (rr,dd) in enumerate(zip(RA,DEC)):
+            print(rr)
+            print(dd)
+            orig = tstep[interpidx][i]
+            interp = rbf(rr, dd)
+            print('Difference TEC and Rbf: {:e}'.format(orig - interp))
+            print('== end bla ==')
+    fig = figure()
+    fig.suptitle(antname)
+    ax = fig.add_subplot(111)
+    im = ax.imshow(screen[..., -1], origin='lower', extent=[ra_max, ra_min, dec_min, dec_max])
+    ax.scatter(RA, DEC, marker='x', color='r')
+    ax.set_xlabel('Right ascension'); ax.set_ylabel('Declination')
+    fig.colorbar(im)
+    fig.savefig(antname + '_{:03d}.png'.format(itstep))
+    del fig
+    show()
+    '''
+    return names.index(antname), screen
+
+
 ms = sys.argv[1]
 h5p = sys.argv[2]
 
@@ -49,7 +133,7 @@ dtime = time[1] - time[0]
 Nantenna = len(names)
 Ntimes = len(time)  # 60s timeslots for an 8 hour pointing
 # Set the frequency axis (that TEC doens't use) to 150 MHz as central frequency with 50 MHz of bandwidth.
-header='''SIMPLE  =                    T / file does conform to FITS standard
+header = '''SIMPLE  =                    T / file does conform to FITS standard
 BITPIX  =                  -32 / number of bits per data pixel
 NAXIS   =                    5 / number of data axes
 NAXIS1  =                 256 / length of RA axis
@@ -136,84 +220,6 @@ hdu.data = data
 hdu.writeto('tecscreen_raw.fits')
 RA = np.asarray(RA)
 DEC = np.asarray(DEC)
-# Interpolate the grid using a nearest neighbour approach.
-# https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
-
-
-def interpolate_station(antname):
-    print('Processing antenna {:s}.'.format(antname))
-    refidx = h5_stations.index('ST001')
-    if 'CS' in antname:
-        # Take ST001 solutions.
-        interpidx = h5_stations.index('ST001')
-    else:
-        interpidx = h5_stations.index(antname)
-    # These will be the new coordinates to evaluate the screen over.
-    size = 256
-    # Do the interpolation in pixel space.
-    x = np.arange(size)
-    y = np.arange(size)
-    xx, yy = np.meshgrid(x, y)
-    # Do radial basis function interpolation for each time step.
-    screen = np.zeros((TEC.shape[-1], 256, 256))
-    # Iterate over all timeslots.
-    for itstep in range(TEC.shape[-1]):
-        X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
-        tecs = TEC[:, interpidx, itstep] - TEC[:, refidx, itstep]
-        rbf = Rbf(X, Y, tecs, smooth=0.0)
-        '''
-        if ('CS' not in antname) and ('RS' not in antname):
-            print('== bla ==')
-            for i, (rr,dd) in enumerate(zip(RA,DEC)):
-                print(rr)
-                print(dd)
-                orig = tstep[interpidx][i]
-                interp = rbf(rr, dd)
-                print('Difference TEC and Rbf: {:e}'.format(orig - interp))
-                print('== end bla ==')
-        '''
-        tinterp = rbf(xx, yy)
-        if not np.allclose(tinterp[Y, X], tecs, rtol=1e-5):
-            raise ValueError('Interpolated screen does not go through nodal points.')
-        screen[itstep, :, :] = tinterp
-    '''
-    didx = directions.index('P470')
-    print(didx)
-    print(tecs.shape)
-    print(X[didx], Y[didx])
-    print(screen[:, 136, 129].shape)
-    fig = figure()
-    fig.suptitle(antname)
-    ax = fig.add_subplot(111)
-    ax.plot(TEC[didx, interpidx, :] - TEC[didx, refidx, :], 'C0h--', label='H5parm', markersize=12)
-    ax.plot(screen[:, 136, 129], 'C1h--', label='Rbf Interp. Y,X')
-    ax.plot(screen[:, 129, 136], 'C2h--', label='Rbf Interp. X,Y')
-    ax.legend()
-    ax.set_xlabel('Time'); ax.set_ylabel('dTEC')
-    show()
-    del fig
-    if ('CS' not in antname) and ('RS' not in antname):
-        print('== bla ==')
-        for i, (rr,dd) in enumerate(zip(RA,DEC)):
-            print(rr)
-            print(dd)
-            orig = tstep[interpidx][i]
-            interp = rbf(rr, dd)
-            print('Difference TEC and Rbf: {:e}'.format(orig - interp))
-            print('== end bla ==')
-    fig = figure()
-    fig.suptitle(antname)
-    ax = fig.add_subplot(111)
-    im = ax.imshow(screen[..., -1], origin='lower', extent=[ra_max, ra_min, dec_min, dec_max])
-    ax.scatter(RA, DEC, marker='x', color='r')
-    ax.set_xlabel('Right ascension'); ax.set_ylabel('Declination')
-    fig.colorbar(im)
-    fig.savefig(antname + '_{:03d}.png'.format(itstep))
-    del fig
-    show()
-    '''
-    return names.index(antname), screen
-
 
 # Inspired by https://stackoverflow.com/questions/38309535/populate-numpy-array-through-concurrent-futures-multiprocessing
 data_int = np.zeros(data.shape)

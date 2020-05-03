@@ -31,6 +31,87 @@ def plot_screen(img, prefix='', title='', suffix='', wcs=None):
     del fig
 
 
+# Interpolate the grid using a nearest neighbour approach.
+# https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
+def interpolate_station(antname, ifstep):
+    ''' Interpolate the solutions of a given antenna into a smooth screen using radial basis function interpolation.
+
+    Args:
+        antname (str): name of the antenna to interpolate.
+        ifstep (int): index of the frequency slot to be interpolated.
+
+    Returns:
+        antindex (int): index of the antenna being processed.
+        screen (ndarray): numpy ndarray containing the interpolated screen.
+    '''
+    # print('Processing antenna {:s}.'.format(antname))
+    if 'CS' in antname:
+        # Take ST001 solutions.
+        interpidx = h5_stations.index('ST001')
+    else:
+        interpidx = h5_stations.index(antname)
+    # These will be the new coordinates to evaluate the screen over.
+    size = 256
+    x = np.arange(size)
+    y = np.arange(size)
+    xx, yy = np.meshgrid(x, y)
+    # Do radial basis function interpolation for each time step.
+    # First axis of data is time.
+    screen = np.ones((data.shape[0], 1, 1, 4, 256, 256))
+    X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
+    # data has shape (time, freq, ant, matrix, y, x)
+    # gains has shape (time, freq, ant, dir, pol)
+    # Iterate over all timeslots.
+    for itstep in range(data.shape[0]):
+        # Interpolate the gains, not the Re/Im or Amp/Phase separately.
+        gXX = gains[itstep, ifstep, interpidx, :, 0]
+        gYY = gains[itstep, ifstep, interpidx, :, -1]
+        rbfXX = Rbf(X, Y, gXX, smooth=0.0)
+        rbfYY = Rbf(X, Y, gYY, smooth=0.0)
+        tinterpXX = rbfXX(xx, yy)
+        tinterpYY = rbfYY(xx, yy)
+        if not np.allclose(tinterpXX[Y, X], gXX, rtol=1e-5):
+            raise ValueError('Interpolated screen for polarization XX does not go through nodal points.')
+        if not np.allclose(tinterpYY[Y, X], gYY, rtol=1e-5):
+            raise ValueError('Interpolated screen for polarization YY does not go through nodal points.')
+        del gXX, gYY
+        matrix = np.asarray([np.real(tinterpXX), np.imag(tinterpXX), np.real(tinterpYY), np.imag(tinterpYY)])
+        screen[itstep, 0, 0, :, :, :] = matrix
+    '''
+    didx = directions.index('P470')
+    fig = figure()
+    fig.suptitle(antname)
+    ax = fig.add_subplot(111)
+    ax.plot(np.real(gains[:, ifstep, interpidx, 0, didx]), 'C0h--', label='ReXX H5parm', markersize=12)
+    ax.plot(screen[:, 0, 0, 0, 136, 129], 'C1h--', label='ReXX Rbf Interp. Y,X')
+    ax.plot(screen[:, 0, 0, 0, 129, 136], 'C2h--', label='ReXX Rbf Interp. X,Y')
+    ax.legend()
+    ax.set_xlabel('Time'); ax.set_ylabel('Re G')
+    show()
+    del fig
+    if ('CS' not in antname) and ('RS' not in antname):
+        print('== bla ==')
+        for i, (rr,dd) in enumerate(zip(RA,DEC)):
+            print(rr)
+            print(dd)
+            orig = tstep[interpidx][i]
+            interp = rbf(rr, dd)
+            print('Difference TEC and Rbf: {:e}'.format(orig - interp))
+            print('== end bla ==')
+    fig = figure()
+    fig.suptitle(antname)
+    ax = fig.add_subplot(111)
+    im = ax.imshow(screen[..., -1], origin='lower', extent=[ra_max, ra_min, dec_min, dec_max])
+    ax.scatter(RA, DEC, marker='x', color='r')
+    ax.set_xlabel('Right ascension'); ax.set_ylabel('Declination')
+    fig.colorbar(im)
+    fig.savefig(antname + '_{:03d}.png'.format(itstep))
+    del fig
+    show()
+    '''
+    return names.index(antname), screen
+
+
 ms = sys.argv[1]
 h5p = sys.argv[2]
 
@@ -167,78 +248,6 @@ hdu.data = data
 hdu.writeto('gainscreen_raw.fits', overwrite=True)
 RA = np.asarray(RA)
 DEC = np.asarray(DEC)
-
-
-# Interpolate the grid using a nearest neighbour approach.
-# https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array
-def interpolate_station(antname, ifstep):
-    # print('Processing antenna {:s}.'.format(antname))
-    if 'CS' in antname:
-        # Take ST001 solutions.
-        interpidx = h5_stations.index('ST001')
-    else:
-        interpidx = h5_stations.index(antname)
-    # These will be the new coordinates to evaluate the screen over.
-    size = 256
-    x = np.arange(size)
-    y = np.arange(size)
-    xx, yy = np.meshgrid(x, y)
-    # Do radial basis function interpolation for each time step.
-    # First axis of data is time.
-    screen = np.ones((data.shape[0], 1, 1, 4, 256, 256))
-    X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
-    # data has shape (time, freq, ant, matrix, y, x)
-    # gains has shape (time, freq, ant, dir, pol)
-    # Iterate over all timeslots.
-    for itstep in range(data.shape[0]):
-        # Interpolate the gains, not the Re/Im or Amp/Phase separately.
-        gXX = gains[itstep, ifstep, interpidx, :, 0]
-        gYY = gains[itstep, ifstep, interpidx, :, -1]
-        rbfXX = Rbf(X, Y, gXX, smooth=0.0)
-        rbfYY = Rbf(X, Y, gYY, smooth=0.0)
-        tinterpXX = rbfXX(xx, yy)
-        tinterpYY = rbfYY(xx, yy)
-        if not np.allclose(tinterpXX[Y, X], gXX, rtol=1e-5):
-            raise ValueError('Interpolated screen for polarization XX does not go through nodal points.')
-        if not np.allclose(tinterpYY[Y, X], gYY, rtol=1e-5):
-            raise ValueError('Interpolated screen for polarization YY does not go through nodal points.')
-        del gXX, gYY
-        matrix = np.asarray([np.real(tinterpXX), np.imag(tinterpXX), np.real(tinterpYY), np.imag(tinterpYY)])
-        screen[itstep, 0, 0, :, :, :] = matrix
-    '''
-    didx = directions.index('P470')
-    fig = figure()
-    fig.suptitle(antname)
-    ax = fig.add_subplot(111)
-    ax.plot(np.real(gains[:, ifstep, interpidx, 0, didx]), 'C0h--', label='ReXX H5parm', markersize=12)
-    ax.plot(screen[:, 0, 0, 0, 136, 129], 'C1h--', label='ReXX Rbf Interp. Y,X')
-    ax.plot(screen[:, 0, 0, 0, 129, 136], 'C2h--', label='ReXX Rbf Interp. X,Y')
-    ax.legend()
-    ax.set_xlabel('Time'); ax.set_ylabel('Re G')
-    show()
-    del fig
-    if ('CS' not in antname) and ('RS' not in antname):
-        print('== bla ==')
-        for i, (rr,dd) in enumerate(zip(RA,DEC)):
-            print(rr)
-            print(dd)
-            orig = tstep[interpidx][i]
-            interp = rbf(rr, dd)
-            print('Difference TEC and Rbf: {:e}'.format(orig - interp))
-            print('== end bla ==')
-    fig = figure()
-    fig.suptitle(antname)
-    ax = fig.add_subplot(111)
-    im = ax.imshow(screen[..., -1], origin='lower', extent=[ra_max, ra_min, dec_min, dec_max])
-    ax.scatter(RA, DEC, marker='x', color='r')
-    ax.set_xlabel('Right ascension'); ax.set_ylabel('Declination')
-    fig.colorbar(im)
-    fig.savefig(antname + '_{:03d}.png'.format(itstep))
-    del fig
-    show()
-    '''
-    return names.index(antname), screen
-
 
 # Inspired by https://stackoverflow.com/questions/38309535/populate-numpy-array-through-concurrent-futures-multiprocessing
 data_int = np.ones(data.shape)

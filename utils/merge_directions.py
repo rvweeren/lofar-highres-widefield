@@ -10,6 +10,17 @@ import numpy as np
 
 
 def interp_along_axis(x, interp_from, interp_to, axis):
+    ''' Interpolate the given axis of an array to a different resolution.
+
+    Args:
+        x (ndarray): array to interpolate.
+        interp_from (ndarray): original axis values from which to interpolate.
+        interp_to (ndarray): new axis values to interpolate to.
+        axis (int): axis which to interpolate.
+
+    Returns:
+        new_vals (ndarray): interpolated input array.
+    '''
     print('Inter/extrapolating from {:d} to {:d} along axis {:d}'.format(len(interp_from), len(interp_to), axis))
     interp_vals = interp1d(interp_from, x, axis=axis, kind='nearest', fill_value='extrapolate')
     new_vals = interp_vals(interp_to)
