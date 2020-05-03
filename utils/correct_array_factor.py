@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-import os, sys
+import os
+import sys
 import numpy as np
 import losoto
 import losoto.lib_operations
-import glob
-from astropy.io import fits
 import pyrap.tables as pt
 import os.path
 from losoto import h5parm
@@ -12,6 +11,7 @@ import logging
 import fnmatch
 
 from lofar.stationresponse import stationresponse
+
 
 def beamcor(ms):
     """ Correct a ms for the beam in the phase center (array_factor only).
@@ -29,29 +29,29 @@ def beamcor(ms):
     parset = create_losoto_beamcorparset(ms)
 
     losotolofarbeam(H5name, 'phase000', ms, useElementResponse=False, useArrayFactor=True, useChanFreq=True)
-    losotolofarbeam(H5name, 'amplitude000', ms, useElementResponse=False, useArrayFactor=True, useChanFreq=True)   
+    losotolofarbeam(H5name, 'amplitude000', ms, useElementResponse=False, useArrayFactor=True, useChanFreq=True)
 
     fixbeam_ST001(H5name)
 
     cmdlosoto = losoto + ' ' + H5name + ' ' + parset
     print cmdlosoto
     os.system(cmdlosoto)
-    
+
     cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=DATA msout=. '
     cmd += 'msin.weightcolumn=WEIGHT_SPECTRUM '
     cmd += 'msout.datacolumn=CORRECTED_DATA steps=[ac1,ac2] msout.storagemanager=dysco '
-    cmd += 'ac1.parmdb='+H5name + ' ac2.parmdb='+H5name + ' '
+    cmd += 'ac1.parmdb=' + H5name + ' ac2.parmdb=' + H5name + ' '
     cmd += 'ac1.type=applycal ac2.type=applycal '
     cmd += 'ac1.correction=phase000 ac2.correction=amplitude000 ac2.updateweights=True '
     print 'DPPP applycal:', cmd
     os.system(cmd)
-   
+
     os.system(taql + " 'update " + ms + " set DATA=CORRECTED_DATA'")
     # Add beam correction keyword here.
     # This script only applies the array factor and assumes the element beam was corrected already.
     # Valid values are Element, ArrayFactor or Full.
     t = pt.table(ms, readonly=False)
-    t.putcolkeywords('DATA', {'LOFAR_APPLIED_BEAM_MODE':'Full'})
+    t.putcolkeywords('DATA', {'LOFAR_APPLIED_BEAM_MODE': 'Full'})
 
     t2 = pt.table(ms + '::FIELD')
     phasedir = t2.getcol('PHASE_DIR').squeeze()
@@ -63,57 +63,59 @@ def beamcor(ms):
     beamdir['m1']['value'] = phasedir[1]
     t.putcolkeywords('DATA', {'LOFAR_APPLIED_BEAM_DIR': beamdir})
 
+
 def create_beamcortemplate(ms):
-  """ Create a DPPP gain H5 template solutution file that can be filled with losoto.
+    """ Create a DPPP gain H5 template solutution file that can be filled with losoto.
 
-  Args:
-    ms (str): path to the measurement set for which to create a template.
-  Returns:
-    H5name (str): name of the h5parm created.
-  """
-  H5name = ms + '_templatejones.h5'   
+    Args:
+        ms (str): path to the measurement set for which to create a template.
+    Returns:
+        H5name (str): name of the h5parm created.
+    """
+    H5name = ms + '_templatejones.h5'
 
-  cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=DATA msout=. '
-  cmd += 'msin.modelcolumn=DATA '
-  cmd += 'steps=[ddecal] ddecal.type=ddecal '
-  cmd += 'ddecal.maxiter=1 ddecal.usemodelcolumn=True ddecal.nchan=1 '
-  cmd += 'ddecal.mode=complexgain ddecal.h5parm=' + H5name  + ' '
-  cmd += 'ddecal.solint=10'
+    cmd = 'DPPP numthreads=32 msin=' + ms + ' msin.datacolumn=DATA msout=. '
+    cmd += 'msin.modelcolumn=DATA '
+    cmd += 'steps=[ddecal] ddecal.type=ddecal '
+    cmd += 'ddecal.maxiter=1 ddecal.usemodelcolumn=True ddecal.nchan=1 '
+    cmd += 'ddecal.mode=complexgain ddecal.h5parm=' + H5name + ' '
+    cmd += 'ddecal.solint=10'
 
-  print cmd
-  os.system(cmd)
+    print cmd
+    os.system(cmd)
 
-  return H5name
+    return H5name
+
 
 def fixbeam_ST001(H5name):
-   """ Replace beam corrections for the phased up station ST001 with correct corrections.
+    """ Replace beam corrections for the phased up station ST001 with correct corrections.
 
-   Args:
+    Args:
       H5name (str): path to the h5parm containing the corrections.
-   Returns:
+    Returns:
       None
-   """
-   H5 = h5parm.h5parm(H5name, readonly=False)
+    """
+    H5 = h5parm.h5parm(H5name, readonly=False)
 
-   ants = H5.getSolset('sol000').getAnt().keys()
-   antsrs = fnmatch.filter(ants,'RS*')
+    ants = H5.getSolset('sol000').getAnt().keys()
+    antsrs = fnmatch.filter(ants, 'RS*')
 
-   if 'ST001' in ants:
+    if 'ST001' in ants:
+        amps = H5.getSolset('sol000').getSoltab('amplitude000').getValues()
+        ampvals = H5.getSolset('sol000').getSoltab('amplitude000').getValues()[0]
+        phasevals = H5.getSolset('sol000').getSoltab('phase000').getValues()[0]
 
-     amps    = H5.getSolset('sol000').getSoltab('amplitude000').getValues()
-     ampvals = H5.getSolset('sol000').getSoltab('amplitude000').getValues()[0]
-     phasevals = H5.getSolset('sol000').getSoltab('phase000').getValues()[0]
+        idx = np.where(amps[1]['ant'] == 'ST001')[0][0]
+        idxrs = np.where(amps[1]['ant'] == antsrs[0])[0][0]
 
-     idx = np.where(amps[1]['ant'] == 'ST001')[0][0]
-     idxrs = np.where(amps[1]['ant'] == antsrs[0])[0][0]
+        ampvals[:, :, idx, 0, :] = ampvals[:, :, idxrs, 0, :]
+        phasevals[:, :, idx, 0, :] = 0.0
 
-     ampvals[:,:, idx, 0,:] = ampvals[:,:, idxrs, 0,:]
-     phasevals[:,:, idx, 0,:] = 0.0
+        H5.getSolset('sol000').getSoltab('amplitude000').setValues(ampvals)
+        H5.getSolset('sol000').getSoltab('phase000').setValues(phasevals)
 
-     H5.getSolset('sol000').getSoltab('amplitude000').setValues(ampvals)
-     H5.getSolset('sol000').getSoltab('phase000').setValues(phasevals)
+    H5.close()
 
-   H5.close()
 
 def create_losoto_beamcorparset(ms):
     """ Create a losoto parset to fill the beam correction values'.
@@ -125,17 +127,17 @@ def create_losoto_beamcorparset(ms):
     """
     parset = 'losotobeam.parset'
     os.system('rm -f ' + parset)
-    f=open(parset, 'w') 
+    f = open(parset, 'w')
 
     f.write('pol = [XX,YY]\n')
     f.write('soltab = [sol000/*]\n\n\n')
 
-    #f.write('[beam]\n')
-    #f.write('ms = %s\n' % ms)
-    #f.write('operation = LOFARBEAM\n')
-    #f.write('useElementResponse = False\n')
-    #f.write('useArrayFactor = True\n')
-    #f.write('useChanFreq = True\n\n\n')
+    # f.write('[beam]\n')
+    # f.write('ms = %s\n' % ms)
+    # f.write('operation = LOFARBEAM\n')
+    # f.write('useElementResponse = False\n')
+    # f.write('useArrayFactor = True\n')
+    # f.write('useChanFreq = True\n\n\n')
 
     f.write('[plotphase]\n')
     f.write('operation = PLOT\n')
@@ -152,10 +154,11 @@ def create_losoto_beamcorparset(ms):
     f.write('axesInPlot = [time,freq]\n')
     f.write('axisInTable = ant\n')
     f.write('minmax = [0.2,1]\n')
-    f.write('prefix = plotlosoto%s/amplitudes_beam\n' %ms)
+    f.write('prefix = plotlosoto%s/amplitudes_beam\n' % ms)
 
     f.close()
     return parset
+
 
 def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=True, useArrayFactor=True, useChanFreq=True):
     """ Do the beam correction via this imported losoto operation
@@ -168,18 +171,16 @@ def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=Tr
         useArrayFactor (bool): apply the array factor correction.
         useChanFreq (bool): operate per channel.
     """
-
     H5 = h5parm.h5parm(parmdb, readonly=False)
     soltab = H5.getSolset('sol000').getSoltab(soltabname)
 
-    #t = pt.table(ms)
     sr = stationresponse(ms, inverse, useElementResponse, useArrayFactor, useChanFreq)
 
-    numants = pt.taql('select gcount(*) as numants from '+ms+'::ANTENNA').getcol('numants')[0]
+    numants = pt.taql('select gcount(*) as numants from ' + ms + '::ANTENNA').getcol('numants')[0]
     times = soltab.getAxisValues('time')
 
-    for vals, coord, selection in soltab.getValuesIter(returnAxes=['ant','time','pol','freq'], weight=False):
-        vals = losoto.lib_operations.reorderAxes( vals, soltab.getAxesNames(), ['ant','time','freq','pol'] )
+    for vals, coord, selection in soltab.getValuesIter(returnAxes=['ant', 'time', 'pol', 'freq'], weight=False):
+        vals = losoto.lib_operations.reorderAxes(vals, soltab.getAxesNames(), ['ant', 'time', 'freq', 'pol'])
 
         for stationnum in range(numants):
             logging.debug('Working on station number %i' % stationnum)
@@ -189,7 +190,7 @@ def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=Tr
                 beam = beam.reshape(beam.shape[0], 4)
 
                 if soltab.getAxisLen('pol') == 2:
-                    beam = beam[:,[0,3]] # get only XX and YY
+                    beam = beam[:, [0, 3]]  # get only XX and YY
 
                 if soltab.getType() == 'amplitude':
                     vals[stationnum, itime, :, :] = np.abs(beam)
@@ -199,10 +200,11 @@ def losotolofarbeam(parmdb, soltabname, ms, inverse=False, useElementResponse=Tr
                     logging.error('Beam prediction works only for amplitude/phase solution tables.')
                     return 1
 
-        vals = losoto.lib_operations.reorderAxes( vals, ['ant','time','freq','pol'], [ax for ax in soltab.getAxesNames() if ax in ['ant','time','freq','pol']] )
+        vals = losoto.lib_operations.reorderAxes(vals, ['ant', 'time', 'freq', 'pol'], [ax for ax in soltab.getAxesNames() if ax in ['ant', 'time', 'freq', 'pol']])
         soltab.setValues(vals, selection)
 
     H5.close()
+
 
 if __name__ == '__main__':
     msin = sys.argv[1]
