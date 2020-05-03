@@ -57,7 +57,7 @@ def interpolate_station(antname, ifstep):
     xx, yy = np.meshgrid(x, y)
     # Do radial basis function interpolation for each time step.
     # First axis of data is time.
-    screen = np.ones((data.shape[0], 1, 1, 4, 256, 256))
+    screen = np.ones((data.shape[0], 1, 1, 4, 256, 256), dtype=np.float32)
     X, Y = np.around(wcs.wcs_world2pix(RA, DEC, 0)).astype(int)
     # data has shape (time, freq, ant, matrix, y, x)
     # gains has shape (time, freq, ant, dir, pol)
