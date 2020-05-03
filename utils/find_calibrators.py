@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from astropy.io import ascii
 from astropy.table import Table
-from scipy.spatial.distance import pdist
 from scipy.cluster.hierarchy import linkage, fcluster
 
 
