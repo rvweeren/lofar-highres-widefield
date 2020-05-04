@@ -237,4 +237,4 @@ if __name__ == "__main__":
     parser.add_argument('--append-to-solset', dest='append_to_solset', default=None, help='Append the new soltab to the given solset instead of creating a new one.')
     args = parser.parse_args()
 
-    main(  mspath=args.mspath, mssuffix=args.mssuffix, h5parms=args.h5parms, soltabs2merge=args.soltabs2merge, solsetin=args.solsetin, h5out_name=args.h5out, append_to_solset=args.append_to_solset )
+    main(mspath=args.mspath, mssuffix=args.mssuffix, h5parms=args.h5parms, soltabs2merge=args.soltabs2merge, solsetin=args.solsetin, h5out_name=args.h5out, append_to_solset=args.append_to_solset)
