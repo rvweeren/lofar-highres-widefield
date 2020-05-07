@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+''' Selfcalibrate a measurement set.
+
+This code has been adapted from https://github.com/mhardcastle/ddf-pipeline/blob/master/scripts/runwsclean.py to accomodate long baseline data.
+'''
 import matplotlib; matplotlib.use('Agg')
 import os
 import sys

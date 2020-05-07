@@ -1,3 +1,10 @@
+''' Corrects the array factor for a given direction.
+
+Note that the element beam is not undone and redone in the given directions, hence an error will be made.
+Newer versions of DP3 can do this correctly, making this script obsolete if using those.
+
+This code has been extracted from https://github.com/mhardcastle/ddf-pipeline/blob/master/scripts/runwsclean.py
+'''
 #!/usr/bin/env python
 import os
 import sys
