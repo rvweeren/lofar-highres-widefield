@@ -236,9 +236,10 @@ for i, h5 in enumerate(h5list):
         phase = reorderAxes(phase_tmp, st.getAxesNames(), axes_new)
         tp = interp_along_axis(phase, st.getAxisValues('time'), ax_time, -1)
         if tp.shape[-2] == 1:
+            tptmp = tp
             print('Only 1 freq axis, scipy interpol1d does not like that, do an append to extend to', len(ax_freq))
             for ff in ax_freq[:-1]:
-                tp = np.append(tp, phase, axis=-2)
+                tp = np.append(tp, tptmp, axis=-2)
         else:
             tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
         # Now add the phases to the total phase correction for this direction.
@@ -261,9 +262,10 @@ for i, h5 in enumerate(h5list):
         amp = reorderAxes(amp_tmp, st.getAxesNames(), axes_new)
         tp = interp_along_axis(amp, st.getAxisValues('time'), ax_time, -1)
         if tp.shape[-2] == 1:
+            tptmp = tp
             print('Only 1 freq axis, scipy interpol1d does not like that, do an append to extend to', len(ax_freq))
             for ff in ax_freq[:-1]:
-                tp = np.append(tp, amp, axis=-2)
+                tp = np.append(tp, tptmp, axis=-2)
         else:
             tp = interp_along_axis(tp, st.getAxisValues('freq'), ax_freq, -2)
         if idx == 0:
