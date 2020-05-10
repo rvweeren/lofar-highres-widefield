@@ -1,5 +1,4 @@
 import argparse
-import glob
 
 from losoto.lib_operations import reorderAxes
 from scipy.interpolate import interp1d
@@ -28,26 +27,25 @@ def interp_along_axis(x, interp_from, interp_to, axis):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--mspath', dest='msdir', help='Path to the directory with easurement sets to pull frequency axis from, when converting TEC to phase.')
-parser.add_argument('--mssuffix', dest='mssuffix', default='ms', help='Suffix of your measurement sets, e.g. MS or ms.')
-parser.add_argument('--ms', dest='ms', help='single ms file, if given ignore mspath and mssuffix', type=str)
+parser.add_argument('--ms', dest='ms', nargs='+', help='Measurement set(s) to base frequency axis on.', type=str, default=[])
 parser.add_argument('--h5parms', dest='h5parms', nargs='+', help='Input H5parms to merge as directions, where each h5parm is one direction.')
 parser.add_argument('--soltab', dest='soltab2merge', help='SolTab of the H5parms to merge.')
 parser.add_argument('--solset-in', dest='solsetin', help='SolSet to take the soltab from.')
 parser.add_argument('--h5parm-out', dest='h5out', help='Output H5parm with all directions present.')
 parser.add_argument('--convert-tec', dest='convert_tec', action='store_true', default=False, help='Convert TEC values to their corresponding phase corrections base on the frequencies in the Measurement Sets.')
-parser.add_argument('--takefreqfromms', dest='takefreqfromms', action='store_true', default=False, help='Take freq axes from the the single Measurement Sets given by --ms')
 parser.add_argument('--append-to-solset', dest='append_to_solset', default='', help='Append the new soltab to the given solset instead of creating a new one.')
 args = parser.parse_args()
 convert_tec = args.convert_tec
 
-if args.ms is None:
-    mslist = sorted(glob.glob(args.msdir + '/*.' + args.mssuffix))
+mslist = args.ms
+if len(mslist) == 1:
+    ms_first = ms_last = mslist[0]
+elif len(mslist) > 1:
     ms_first = mslist[0]
     ms_last = mslist[-1]
-else:
-    ms_first = args.ms
-    ms_last = args.ms
+
+if mslist:
+    takefreqfromms = True
 
 h5list = args.h5parms
 
@@ -94,7 +92,7 @@ else:
 
 vals_reordered = reorderAxes(vals, st.getAxesNames(), axes_new)
 
-if args.takefreqfromms:
+if takefreqfromms:
     ff = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_first + '::SPECTRAL_WINDOW')
     ax_freq_ms = ff.getcol('CHAN_FREQ')[0]
     ff.close()
@@ -115,7 +113,7 @@ if 'amplitude' in args.soltab2merge:
             len_freq_old = len(ax_freq)
             name_freq = ih5
         fh5.close()
-    if args.takefreqfromms:
+    if takefreqfromms:
         ax_freq = ax_freq_ms
     else:
         print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1] - ax_freq[0]))
@@ -141,7 +139,7 @@ elif 'phase' in args.soltab2merge:
             len_freq_old = len(ax_freq)
             name_freq = ih5
         fh5.close()
-    if args.takefreqfromms:
+    if takefreqfromms:
         ax_freq = ax_freq_ms
     else:
         print('Fastest frequency axis taken from {:s} with a solution interval of {:f} Hz.'.format(name_freq, ax_freq[1] - ax_freq[0]))
@@ -158,7 +156,7 @@ elif convert_tec and 'tec' in args.soltab2merge:
 
     fl = ct.taql('SELECT CHAN_FREQ, CHAN_WIDTH FROM ' + ms_last + '::SPECTRAL_WINDOW')
     freq_last = np.max(fl.getcol('CHAN_FREQ'))
-    if not args.takefreqfromms:
+    if not takefreqfromms:
         print(freq_first, freq_last, freq_spacing)
     ax_freq = np.arange(freq_first, freq_last + freq_spacing, freq_spacing)
     phases = np.zeros((1, 1, len(antennas), len(ax_freq), len(ax_time)))
