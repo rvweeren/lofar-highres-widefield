@@ -33,6 +33,7 @@ parser.add_argument('--soltab', dest='soltab2merge', help='SolTab of the H5parms
 parser.add_argument('--solset-in', dest='solsetin', help='SolSet to take the soltab from.')
 parser.add_argument('--h5parm-out', dest='h5out', help='Output H5parm with all directions present.')
 parser.add_argument('--convert-tec', dest='convert_tec', action='store_true', default=False, help='Convert TEC values to their corresponding phase corrections base on the frequencies in the Measurement Sets.')
+parser.add_argument('--from1to2pol', dest='from1to2pol', help='Add polarization axis for tec or phase solutions',action='store_true', default=False)
 parser.add_argument('--append-to-solset', dest='append_to_solset', default='', help='Append the new soltab to the given solset instead of creating a new one.')
 args = parser.parse_args()
 convert_tec = args.convert_tec
@@ -281,6 +282,15 @@ for i, h5 in enumerate(h5list):
                 gains = np.append(gains, tp, axis=0)
     h5.close()
 
+# add polarization axis, XX and YY will be identical
+if (args.from1to2pol) and (len(polarizations) == 0) and ('phase' in args.soltab2merge):
+    polarizations = np.array(['XX','YY'])
+    axes_new = ['pol'] + axes_new
+    phasestmp = np.ones((2,) + phases.shape)
+    phasestmp[0, ...] = phases
+    phasestmp[1, ...] = phases
+    phases = phasestmp    
+    
 # Create the output h5parm.
 try:
     weights = np.ones(phases.shape)
@@ -303,7 +313,14 @@ if 'tec' in args.soltab2merge:
         weights = np.ones(phases[:, :, 0, :].shape)
         solsetout.makeSoltab('tec', axesNames=['dir', 'ant', 'time'], axesVals=[directions, antennas, ax_time], vals=phases[:, :, 0, :], weights=weights)
     elif convert_tec:
-        weights = np.ones(phases[0, ...].shape)
-        # solsetout.makeSoltab('phase', axesNames=['pol', 'dir', 'ant', 'freq', 'time'], axesVals=[['XX'], directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
-        solsetout.makeSoltab('phase', axesNames=['dir', 'ant', 'freq', 'time'], axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0, ...], weights=weights)
+        if args.from1to2pol:
+            phasestmp = np.ones((2,) +phases[0,...].shape) # update shape
+            phasestmp[0, ...] = phases # fill in
+            phasestmp[1, ...] = phases
+            phases = phasestmp
+            weights = np.ones(phases.shape)
+            solsetout.makeSoltab('phase', axesNames=['pol', 'dir', 'ant', 'freq', 'time'], axesVals=[ np.array(['XX','YY']), directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
+        else:
+            weights = np.ones(phases[0, ...].shape)
+            solsetout.makeSoltab('phase', axesNames=['dir', 'ant', 'freq', 'time'], axesVals=[directions, antennas, ax_freq, ax_time], vals=phases[0, ...], weights=weights)        
 h5out.close()
