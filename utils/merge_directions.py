@@ -46,6 +46,8 @@ elif len(mslist) > 1:
 
 if mslist:
     takefreqfromms = True
+else:
+    takefreqfromms = False
 
 h5list = args.h5parms
 
