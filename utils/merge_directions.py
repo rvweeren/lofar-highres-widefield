@@ -288,8 +288,12 @@ try:
     weights = np.ones(phases.shape)
 except NameError:
     weights = np.ones(gains.shape)
-sources = np.array(sourcelist, dtype=[('name', 'S128'), ('dir', '<f4', (2,))])
-solsetout.obj.source.append(sources)
+
+# A solset can only have one set of directions.
+if not append_to_solset:
+    # We are making a new solset, define a set of directions.
+    sources = np.array(sourcelist, dtype=[('name', 'S128'), ('dir', '<f4', (2,))])
+    solsetout.obj.source.append(sources)
 if 'phase' in args.soltab2merge and len(polarizations) > 0:
     solsetout.makeSoltab('phase', axesNames=axes_new, axesVals=[polarizations, directions, antennas, ax_freq, ax_time], vals=phases, weights=weights)
 if 'amplitude' in args.soltab2merge and len(polarizations) > 0:
